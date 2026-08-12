@@ -110,8 +110,6 @@ BatteryRosAdapter::OnFault(const BatteryFault& fault)
     msg.header.stamp = ros::Time::now();
     msg.header.frame_id = "battery_fault";
 
-    /* raw bytes fill old-style msg fields */
-    int idx = 0;
     msg.fault_0 = (static_cast<uint16_t>(fault.sys_fault1) << 8) | fault.sys_fault2;
     msg.fault_1 = (static_cast<uint16_t>(fault.dischg_fault1) << 8) | fault.dischg_fault2;
     msg.fault_2 = (static_cast<uint16_t>(fault.chg_fault1) << 8) | fault.chg_fault2;
