@@ -98,23 +98,23 @@ constexpr uint8_t BIT_VOUT_MOS_STAT = 0x02;
 
 /* 0x33: VBUS 状态 + 输入电压标志 */
 constexpr uint8_t REG_STATE_CTL2 = 0x33;
-constexpr uint8_t BIT_VBUS_OK = 0x01; /* bit0: VBUS 输入正常 */
-constexpr uint8_t BIT_SINK_OK = 0x02; /* bit1: Sink 连接正常 */
-constexpr uint8_t BIT_SINK_PD_OK = 0x04; /* bit2: PD 协商成功 */
+constexpr uint8_t BIT_VBUS_OK = 0x80;    /* bit7: Vbus_Ok, 1=有电 */
+constexpr uint8_t BIT_VBUS_OV = 0x40;    /* bit6: Vbus_Ov, 1=输入过压 */
 
 /* 0x34: TypeC 连接状态 */
 constexpr uint8_t REG_TYPEC_STATE = 0x34;
+constexpr uint8_t BIT_SINK_OK    = 0x80;  /* bit7: Sink 输入连接有效 */
+constexpr uint8_t BIT_SRC_OK     = 0x40;  /* bit6: Src 输出连接有效 */
+constexpr uint8_t BIT_SRC_PD_OK  = 0x20;  /* bit5: Src PD 协商完成 */
+constexpr uint8_t BIT_SINK_PD_OK = 0x10;  /* bit4: Sink PD 协商完成 */
 
 /* 0x35: 适配器 PDO 能力 */
 constexpr uint8_t REG_RECEIVED_PDO = 0x35;
 
 /* 0x38: 过流/短路标志 */
 constexpr uint8_t REG_STATE_CTL3 = 0x38;
-constexpr uint8_t BIT_OCP_CHG = 0x01;   /* 充电过流 */
-constexpr uint8_t BIT_SCP_CHG = 0x02;   /* 充电短路 */
-constexpr uint8_t BIT_OTP     = 0x04;   /* 过温 */
-constexpr uint8_t BIT_UTP     = 0x08;   /* 欠温 */
-constexpr uint8_t BIT_OVP     = 0x10;   /* 过压 */
+constexpr uint8_t BIT_VSYS_OC   = 0x20; /* bit5: Vsys 输出过流 */
+constexpr uint8_t BIT_VSYS_SCDT = 0x10; /* bit4: Vsys 输出短路 */
 
 /* ================================================================
  * ADC 寄存器 (16位, 先读低字节再读高字节)

@@ -97,12 +97,12 @@ bool IP2366Source::getProp(PowerProp prop, PowerValue& out)
         return true;
 
     case PowerProp::HEALTH:
-        if (m_fault_code & BIT_OTP) {
+        if (m_fault_code & BIT_VSYS_OC) {
+            out = PowerValue("overcurrent");
+        } else if (m_fault_code & BIT_VSYS_SCDT) {
+            out = PowerValue("dead");
+        } else if (m_chg_state == CHG_TIMEOUT) {
             out = PowerValue("overheat");
-        } else if (m_fault_code & BIT_OVP) {
-            out = PowerValue("overvoltage");
-        } else if (m_fault_code & BIT_UTP) {
-            out = PowerValue("cold");
         } else {
             out = PowerValue("good");
         }
@@ -124,14 +124,12 @@ bool IP2366Source::getProp(PowerProp prop, PowerValue& out)
 
     case PowerProp::FAULT_REASON: {
         std::string reason;
-        if (m_fault_code & BIT_OCP_CHG) reason += "ocp_chg ";
-        if (m_fault_code & BIT_SCP_CHG) reason += "scp_chg ";
-        if (m_fault_code & BIT_OTP)     reason += "otp ";
-        if (m_fault_code & BIT_UTP)     reason += "utp ";
-        if (m_fault_code & BIT_OVP)     reason += "ovp ";
-        if (m_chg_state == CHG_TIMEOUT) reason += "timeout ";
+        if (m_fault_code & BIT_VSYS_OC)   reason += "vsys_oc ";
+        if (m_fault_code & BIT_VSYS_SCDT) reason += "vsys_short ";
+        if (m_fault_code & BIT_EN_INT_LOW) reason += "chip_int ";
+        if (m_chg_state == CHG_TIMEOUT)   reason += "timeout ";
         if (reason.empty()) reason = "none";
-        else reason.pop_back(); /* 去掉末尾空格 */
+        else reason.pop_back();
         out = PowerValue(reason);
         return true;
     }
@@ -514,7 +512,7 @@ bool IP2366Source::initChargeParams()
 
 void IP2366Source::readChargeState()
 {
-    uint8_t s0 = 0, s2 = 0, s3 = 0;
+    uint8_t s0 = 0, s2 = 0, s3 = 0, ts = 0;
 
     if (!readReg(REG_STATE_CTL0, s0)) {
         ECO_WARN("[IP2366] read STATE_CTL0 failed");
@@ -527,6 +525,11 @@ void IP2366Source::readChargeState()
     if (!readReg(REG_STATE_CTL3, s3)) {
         ECO_WARN("[IP2366] read STATE_CTL3 failed");
         return;
+    }
+    /* 0x34: TypeC 连接状态 (Sink/Src/PD 标志位) */
+    if (!readReg(REG_TYPEC_STATE, ts)) {
+        ECO_WARN("[IP2366] read TYPEC_STATE failed");
+        ts = 0;
     }
 
     /* ADC (先低后高) */
@@ -545,8 +548,8 @@ void IP2366Source::readChargeState()
         bool    new_active = (s0 & BIT_CHG_ACTIVE) != 0;
         bool    new_end    = (s0 & BIT_CHG_END) != 0;
         bool    new_vbus   = (s2 & BIT_VBUS_OK) != 0;
-        bool    new_sink   = (s2 & BIT_SINK_OK) != 0;
-        bool    new_sinkpd = (s2 & BIT_SINK_PD_OK) != 0;
+        bool    new_sink   = (ts & BIT_SINK_OK) != 0;
+        bool    new_sinkpd = (ts & BIT_SINK_PD_OK) != 0;
 
         bool new_fault = (s3 != 0);
         if (new_fault && s3 == m_fault_code) {

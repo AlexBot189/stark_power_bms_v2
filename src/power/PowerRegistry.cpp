@@ -74,13 +74,12 @@ std::vector<IPowerSource*> PowerRegistry::findSources(const std::string& type)
 
 bool PowerRegistry::getProp(const std::string& srcName, PowerProp prop, PowerValue& out)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutex);
 
     for (auto& src : m_sources) {
         if (src->name() == srcName) {
-            /* 释放锁后委托给 source 自身, 避免持锁回调 */
             IPowerSource* target = src.get();
-            lock.~lock_guard();
+            lock.unlock();
             return target->getProp(prop, out);
         }
     }
@@ -89,12 +88,12 @@ bool PowerRegistry::getProp(const std::string& srcName, PowerProp prop, PowerVal
 
 bool PowerRegistry::setProp(const std::string& srcName, PowerProp prop, const PowerValue& val)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutex);
 
     for (auto& src : m_sources) {
         if (src->name() == srcName) {
             IPowerSource* target = src.get();
-            lock.~lock_guard();
+            lock.unlock();
             return target->setProp(prop, val);
         }
     }
