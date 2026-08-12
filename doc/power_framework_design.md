@@ -223,7 +223,73 @@ IDLE → DETECT → CHARGE → FULL → FAULT
 
 ---
 
-## 六、BMS 数据接入
+## 六、BMS 控制交互（基于 V1.02 协议）
+
+### 6.1 SOC 主动下发的控制指令
+
+充电流程中 SOC 通过 BatteryDispatcher 向 BMS 下发控制：
+
+| 指令 | 协议触发条件 | 代码调用 |
+|------|------------|---------|
+| 0x2006 充电器接入通知 | 适配器插入/拔出 | `SetChargerStatus(true/false)` |
+| 0x2007 充放电MOS控制 | 充满关充电MOS / 故障关放电 | `ControlMOS(chg, dischg)` |
+
+### 6.2 BMS 被动上报的状态数据
+
+BatteryDispatcher 周期性轮询 BMS，结果通过 Observer 回调通知：
+
+| 指令 | 数据 | 充电流程中的使用 |
+|------|------|----------------|
+| 0x2004 电芯电压 | 总电压 + 6节电芯 mV | 单节压差检测 |
+| 0x5002 电流温度 | 充放电电流 mA + BMS温度 | 充满判断(I<200mA) |
+| 0x5004 SOC容量 | SOC% + 剩余容量 + BMS状态码 | SOC=100%判断, 0x0A=充电/0x1A=放电 |
+| 0x503B 实时故障 | 7字节故障状态 (系统/放电/充电分级) | 故障分级判断 + 禁充/限放决策 |
+| 0x503C 故障次数 | 11种历史故障计数 | 诊断参考 |
+
+### 6.3 BmsUartSource 状态映射
+
+将 BatteryFault + BatteryStatus 映射到标准 PowerProp：
+
+```
+STATUS:     bms_status=0x0A → "charging"
+            bms_status=0x1A → "discharging"
+            anyFault()       → "fault"
+
+HEALTH:     chg_overtemp || dischg_overtemp → "overheat"
+            overcharge_l1 || overdischarge_l1 → "overvoltage"
+            无故障 → "good"
+
+FAULT:      sys_fault1!=0 || sys_fault2!=0
+            || chg_fault1!=0 || dischg_fault1!=0
+
+CAPACITY:   soc_percent
+TEMPERATURE: temperature_k_raw (开氏×10, 和标准一致)
+VOLTAGE_NOW: total_voltage_mv
+CURRENT_NOW: current_ma (正=充电, 负=放电)
+```
+
+### 6.4 充电控制发起路径
+
+```
+IP2366 INT 上升沿 (适配器插入)
+  → intThreadFunc() 等 100ms → readChargeState()
+  → PowerManager::setChargerOnline(true)  [atomic 通知]
+
+PowerManager::tick() [1Hz, poll_thread]
+  → readChargerStatus()  / readBatteryStatus()
+  → 评估状态转换
+  → 状态变化时:
+      IDLE→DETECT:  (无需 BMS 控制)
+      DETECT→CHARGE: SetChargerStatus(true)   [0x2006]
+      CHARGE→FULL:   ControlMOS(CLOSE, NO_ACT) [0x2007 关充电]
+      CHARGE→FAULT:  setProp(CHARGE_ENABLE,false) [关IP2366]
+                     + ControlMOS(CLOSE, CLOSE) [0x2007]
+      FULL→CHARGE(再充电): SetChargerStatus(true) [0x2006]
+```
+
+---
+
+## 七、BMS 数据接入
 
 BatteryDispatcher 已有完整的 BMS UART 通信能力（V1.02 协议，12 条指令全支持）。需要新增 `BmsUartSource` 将 BatteryDispatcher 包装为 IPowerSource 接口，使 PowerManager 能通过标准属性访问 BMS 数据：
 
@@ -250,7 +316,7 @@ BatteryDispatcher (现有，不改)
 
 ---
 
-## 七、线程模型
+## 八、线程模型
 
 ```
 现有线程:
@@ -269,7 +335,7 @@ BatteryDispatcher (现有，不改)
 
 ---
 
-## 八、文件清单
+## 九、文件清单
 
 ```
 src/power/
@@ -286,7 +352,7 @@ src/power/
 
 ---
 
-## 九、框架复用（后续项目）
+## 十、框架复用（后续项目）
 
 本架构设计时预留了跨项目复用能力：
 
