@@ -502,6 +502,20 @@ bool IP2366Source::initChargeParams()
     }
     ECO_INFO("[IP2366] stop current: %u mA", static_cast<unsigned>(istop * 50));
 
+    /* 使能 INT 异常通知 (0x00 bit5): 故障时 INT 拉低 2ms */
+    if (!rmwReg(REG_SYS_CTL0, BIT_EN_INT_LOW, BIT_EN_INT_LOW)) {
+        ECO_ERROR("[IP2366] enable INT low failed");
+        return false;
+    }
+    ECO_INFO("[IP2366] INT fault notification enabled");
+
+    /* 禁止待机 (0x09 bit7: 待机使能 = 0) */
+    if (!rmwReg(REG_SYS_CTL9, BIT_STANDBY_EN, 0)) {
+        ECO_WARN("[IP2366] disable standby failed");
+    } else {
+        ECO_INFO("[IP2366] standby disabled");
+    }
+
     ECO_INFO("[IP2366] charge params initialized");
     return true;
 }

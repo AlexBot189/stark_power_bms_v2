@@ -57,15 +57,20 @@ constexpr uint8_t MASK_STOP_CURRENT = 0xF0;
 /* [3:0]: 再充电阈值 */
 constexpr uint8_t MASK_RECHARGE_THRES = 0x0F;
 
+/* 0x09: 系统控制 9 — 待机使能和低电电压设置 */
+constexpr uint8_t REG_SYS_CTL9 = 0x09;
+constexpr uint8_t BIT_STANDBY_EN = 0x80; /* bit7: 待机使能 */
+
 /* 0x0D: PDO 档位选择 */
 constexpr uint8_t REG_SELECT_PDO = 0x0D;
 /* [2:0]: PDO 档位 */
 constexpr uint8_t MASK_PDO_SELECT = 0x07;
-constexpr uint8_t CONST_PDO_5V  = 0;
-constexpr uint8_t CONST_PDO_9V  = 1;
-constexpr uint8_t CONST_PDO_12V = 2;
-constexpr uint8_t CONST_PDO_15V = 3;
-constexpr uint8_t CONST_PDO_20V = 4;
+constexpr uint8_t CONST_PDO_MAX  = 0;
+constexpr uint8_t CONST_PDO_5V   = 1;
+constexpr uint8_t CONST_PDO_9V   = 2;
+constexpr uint8_t CONST_PDO_12V  = 3;
+constexpr uint8_t CONST_PDO_15V  = 4;
+constexpr uint8_t CONST_PDO_20V  = 5;
 
 /* ================================================================
  * 状态寄存器 (只读)
