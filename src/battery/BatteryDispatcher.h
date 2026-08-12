@@ -60,6 +60,7 @@ struct BatteryPollConfig {
     bool     enable_soc_capacity{ true };           /* 轮询 SOC 容量 0x5004 */
     bool     enable_fault{ true };                  /* 轮询故障信息 0x503B */
     bool     enable_fault_count{ false };           /* 轮询历史故障次数 0x503C */
+    uint32_t fault_count_period_ms{ 60000 };       /* 0x503C 轮询周期 ms */
     bool     enable_charge_current{ false };        /* 轮询充电电流 0x2005 */
 };
 
