@@ -1,0 +1,1979 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>MCU数据标定</title>
+    <!-- 引入 Element UI 的 CSS 文件 -->
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="../css/element.css">
+    <script src="../js/vue.js"></script>
+    <script src="../js/element.js"></script>
+    <script src="../js/index.js"></script>
+    <!-- <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css"> -->
+</head>
+
+<body>
+    <div id="app">
+        <el-tabs v-model="activeTab">
+            <el-tab-pane label="高级设置" name="advanced">
+                <h2>高级设置内容</h2>
+                <!-- 在此处添加高级设置的具体内容 -->
+            </el-tab-pane>
+            <el-tab-pane label="清扫管理" name="clean_manager">
+                <!-- 在此处添加清扫管理具体内容 -->
+                <div class="clean_manager-control">
+                    <template>
+                        <div class="container">
+                            <div class="left-panel">
+                                <div class="divider"></div>
+                                <el-descriptions title="建图/定位"></el-descriptions>
+                                <el-button @click="buttonStartMapping">开始建图</el-button>
+                                <el-button @click="buttonMapAlign">地图摆正</el-button>
+                                <el-button @click="buttonCancelMapping">取消建图</el-button>
+                                <el-button @click="buttonSaveMap">保存地图</el-button>
+                                <el-button @click="buttonStartLocalization">开始定位</el-button>
+                                <el-button @click="buttonStopLocalization">取消定位</el-button>
+                                <el-button @click="OpenUpdateMap">打开地图显示更新</el-button>
+                                <el-button @click="CloseUpdateMap">关闭地图显示更新</el-button>
+                                <div class="divider"></div>
+                                <el-descriptions title="清扫管理:"></el-descriptions>
+                                <el-button @click="buttonStartClean">开始清扫</el-button>
+                                <el-button @click="buttonPauseClean">暂停清扫</el-button>
+                                <el-button @click="buttonResumeClean">继续清扫</el-button>
+                                <el-button @click="buttonStopClean">停止清扫</el-button>
+                                <div class="divider"></div>
+                                <el-descriptions title="slam状态显示:"></el-descriptions>
+                                <el-table :data="realtimeData">
+                                    <el-table-column prop="x" label="定位位姿_x"></el-table-column>
+                                    <el-table-column prop="y" label="定位位姿_y"></el-table-column>
+                                    <el-table-column prop="yaw" label="定位位姿_yaw"></el-table-column>
+                                </el-table>
+
+                                <div class="divider"></div>
+                                <el-descriptions title="里程计数据:"></el-descriptions>
+                                <el-table :data="Odom">
+                                    <el-table-column prop="odom_x" label="里程计x轴值(单位m)"></el-table-column>
+                                    <el-table-column prop="odom_y" label="里程计y轴值(单位m)"></el-table-column>
+                                    <el-table-column prop="odom_yaw" label="里程计yaw值(单位rad)"></el-table-column>
+                                </el-table>
+                                <el-descriptions title="IMU数据:"></el-descriptions>
+                                <el-table :data="IMU">
+                                    <el-table-column prop="imu_yaw" label="imu_yaw(单位rad)"></el-table-column>
+                                    <el-table-column prop="imu_pitch" label="imu_pitch(单位rad)"></el-table-column>
+                                    <el-table-column prop="imu_roll" label="imu_roll(单位rad)"></el-table-column>
+                                </el-table>
+
+                                <div class="divider"></div>
+                                <el-descriptions title="1.速度闭环模式测试:"></el-descriptions>
+                                <div class="joystick">
+                                    <button class="joystick-button" @mousedown="startMove('up')"
+                                        @mouseup="stopMove">↑</button>
+                                    <div class="joystick-row">
+                                        <button class="joystick-button" @mousedown="startMove('left')"
+                                            @mouseup="stopMove">←</button>
+                                        <button class="joystick-button" @mousedown="startMove('right')"
+                                            @mouseup="stopMove">→</button>
+                                    </div>
+                                    <button class="joystick-button" @mousedown="startMove('down')"
+                                        @mouseup="stopMove">↓</button>
+                                </div>
+                                <div class="divider"></div>
+                                <div class="speed-control">
+                                    <div class="slider-label">线速度</div>
+                                    <el-slider v-model="linearSpeed" :min="0" :max="0.5" :step="0.01"></el-slider>
+                                    <div class="current-value">{{ linearSpeed.toFixed(2) }} m/s</div>
+                                </div>
+                                <div class="speed-control">
+                                    <div class="slider-label">角速度</div>
+                                    <el-slider v-model="angularSpeed" :min="0" :max="2" :step="0.01"></el-slider>
+                                    <div class="current-value">{{ angularSpeed.toFixed(2) }} rad/s</div>
+                                </div>
+                                <div class="divider"></div>
+                                <el-descriptions title="2.Step模式测试:"></el-descriptions>
+                                <div>
+                                    <el-input v-model="run_distance" class="custom-input" placeholder="输入距离" clearable>
+                                        <template slot="append">定距移动距离(单位mm)</template>
+                                    </el-input>
+                                    <el-button @click="buttonSelfDesignStepRunClicked">开始移动</el-button>
+                                </div>
+                                <div>
+                                    <el-input v-model="turn_angle" class="custom-input" placeholder="输入角度" clearable>
+                                        <template slot="append">定角度旋转角度(单位°)</template>
+                                    </el-input>
+                                    <el-button @click="buttonSelfDesignStepTurnClicked">开始旋转</el-button>
+                                </div>
+                            </div>
+                            <div class="right-panel">
+                                <keep-alive>
+                                    <div class="image-container">
+                                        <img :key="cacheKey" :src="imageSrc" alt="当前使用地图" @load="resetCache">
+                                    </div>
+                                </keep-alive>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </el-tab-pane>
+            <el-tab-pane label="手动控制" name="manual">
+                <!-- 在此处添加手动控制的具体内容 -->
+                <div class="manual-control">
+                    <template>
+                        <div class="container">
+                            <div class="left-panel">
+                                <div class="divider"></div>
+                                <el-descriptions title="1.速度闭环模式测试:"></el-descriptions>
+                                <div class="joystick">
+                                    <button class="joystick-button" @mousedown="startMove('up')"
+                                        @mouseup="stopMove">↑</button>
+                                    <div class="joystick-row">
+                                        <button class="joystick-button" @mousedown="startMove('left')"
+                                            @mouseup="stopMove">←</button>
+                                        <button class="joystick-button" @mousedown="startMove('right')"
+                                            @mouseup="stopMove">→</button>
+                                    </div>
+                                    <button class="joystick-button" @mousedown="startMove('down')"
+                                        @mouseup="stopMove">↓</button>
+                                </div>
+                                <div class="divider"></div>
+                                <div class="speed-control">
+                                    <div class="slider-label">线速度</div>
+                                    <el-slider v-model="linearSpeed" :min="0" :max="0.5" :step="0.01"></el-slider>
+                                    <div class="current-value">{{ linearSpeed.toFixed(2) }} m/s</div>
+                                </div>
+                                <div class="speed-control">
+                                    <div class="slider-label">角速度</div>
+                                    <el-slider v-model="angularSpeed" :min="0" :max="2" :step="0.01"></el-slider>
+                                    <div class="current-value">{{ angularSpeed.toFixed(2) }} rad/s</div>
+                                </div>
+                                <div class="divider"></div>
+                                <el-descriptions title="2.Step模式测试:"></el-descriptions>
+                                <div>
+                                    <el-input v-model="run_distance" class="custom-input" placeholder="输入距离" clearable>
+                                        <template slot="append">定距移动距离(单位mm)</template>
+                                    </el-input>
+                                    <el-button @click="buttonSelfDesignStepRunClicked">开始移动</el-button>
+                                </div>
+                                <div>
+                                    <el-input v-model="turn_angle" class="custom-input" placeholder="输入角度" clearable>
+                                        <template slot="append">定角度旋转角度(单位°)</template>
+                                    </el-input>
+                                    <el-button @click="buttonSelfDesignStepTurnClicked">开始旋转</el-button>
+                                </div>
+                            </div>
+                            <div class="right-panel">
+                                <keep-alive>
+                                    <div class="image-container">
+                                        <img :key="cacheKey" :src="imageSrc" alt="当前使用地图" @load="resetCache">
+                                    </div>
+                                </keep-alive>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="下位机调试信息" name="mcu_debug">
+                <div class="tab-content">
+                    <div class="left-section">
+                        <el-descriptions title="VL6180实时测距数据:"></el-descriptions>
+                        <el-table :data="VL6180">
+                            <el-table-column prop="left_distance" label="沿墙左测距值(单位m)"></el-table-column>
+                            <el-table-column prop="right_distance" label="沿墙右测距值(单位m)"></el-table-column>
+                        </el-table>
+                        <div class="divider"></div>
+                        <el-descriptions title="驱动电机实时测距数据:"></el-descriptions>
+                        <el-table :data="MotorDriver">
+                            <el-table-column prop="left_moter_current" label="左轮电机电流(单位:mA)"></el-table-column>
+                            <el-table-column prop="right_moter_current" label="右轮电机电流(单位:mA)"></el-table-column>
+                            <el-table-column prop="left_encode" label="左轮编码器值"></el-table-column>
+                            <el-table-column prop="right_encode" label="右轮编码器值"></el-table-column>
+                            <el-table-column prop="run_fsm_state" label="运动状态机状态"></el-table-column>
+                            <el-table-column prop="motor_mode" label="电机模式"></el-table-column>
+                        </el-table>
+                        <div class="divider"></div>
+                        <el-descriptions title="里程计数据:"></el-descriptions>
+                        <el-table :data="Odom">
+                            <el-table-column prop="odom_x" label="里程计x轴值(单位m)"></el-table-column>
+                            <el-table-column prop="odom_y" label="里程计y轴值(单位m)"></el-table-column>
+                            <el-table-column prop="odom_yaw" label="里程计yaw值(单位rad)"></el-table-column>
+                        </el-table>
+
+                        <div class="divider"></div>
+                        <el-descriptions title="传感器实时数据:"></el-descriptions>
+                        <el-table :data="SensorDetect">
+                            <el-table-column prop="cliff_detect_status" label="悬崖检测"></el-table-column>
+                            <el-table-column prop="collide_detect_status" label="碰撞检测"></el-table-column>
+                            <el-table-column prop="dangling_detect_status" label="悬空检测"></el-table-column>
+                        </el-table>
+                        <div class="divider"></div>
+                        <el-descriptions title="电池实时数据:"></el-descriptions>
+                        <el-table :data="Battery">
+                            <el-table-column prop="charge_status" label="充电检测"></el-table-column>
+                            <el-table-column prop="in_pipe_status" label="在桩状态检测"></el-table-column>
+                            <el-table-column prop="battery_percent" label="电池电量"></el-table-column>
+                            <el-table-column prop="battery_current" label="电池电流 (单位:mA)"></el-table-column>
+                            <el-table-column prop="battery_voltage" label="电池电压 (单位:mV)"></el-table-column>
+                        </el-table>
+                        <div class="divider"></div>
+
+                        <el-descriptions title="水箱/尘盒实时数据:"></el-descriptions>
+                        <el-table :data="WaterBox">
+                            <el-table-column prop="dust_box_pos" label="尘盒/水箱在位状态"></el-table-column>
+                            <el-table-column prop="mop_in_pos" label="滚刷在位状态"></el-table-column>
+                            <el-table-column prop="lack_water" label="清水箱是否缺水"></el-table-column>
+                            <el-table-column prop="water_full" label="污水箱是否已满"></el-table-column>
+                        </el-table>
+                        <div class="divider"></div>
+                        <el-descriptions title="红外信号接收:"></el-descriptions>
+                        <el-table :data="Infra">
+                            <el-table-column prop="ira_recharge_fl" label="机器左中接收管信号值"></el-table-column>
+                            <el-table-column prop="ira_recharge_fr" label="机器右中接收管信号值"></el-table-column>
+                            <el-table-column prop="ira_recharge_rr" label="机器右侧接收管信号值"></el-table-column>
+                        </el-table>
+
+                        <div class="divider"></div>
+                        <el-descriptions title="机器左中红外信号接收数据实时显示:"></el-descriptions>
+                        <div>
+                            <el-checkbox v-model="isLeftCenterRecieverRecievedLeftIRData">左红外信号</el-checkbox>
+                            <el-checkbox v-model="isLeftCenterRecieverRecievedLeftCenterIRData">左中红外外信号</el-checkbox>
+                            <el-checkbox v-model="isLeftCenterRecieverRecievedRightCenterIRData">右中红外信号</el-checkbox>
+                            <el-checkbox v-model="isLeftCenterRecieverRecievedRightIRData">右红外信号</el-checkbox>
+                        </div>
+                        <div class="divider"></div>
+                        <el-descriptions title="机器右中红外信号接收数据实时显示:"></el-descriptions>
+                        <div>
+                            <el-checkbox v-model="isRightCenterRecieverRecievedLeftIRData">左红外信号</el-checkbox>
+                            <el-checkbox v-model="isRightCenterRecieverRecievedLeftCenterIRData">左中红外外信号</el-checkbox>
+                            <el-checkbox v-model="isRightCenterRecieverRecievedRightCenterIRData">右中红外信号</el-checkbox>
+                            <el-checkbox v-model="isRightCenterRecieverRecievedRightIRData">右红外信号</el-checkbox>
+                        </div>
+                        <div class="divider"></div>
+                        <el-descriptions title="机器右测红外信号接收数据实时显示:"></el-descriptions>
+                        <div>
+                            <el-checkbox v-model="isRightRecieverRecievedLeftIRData">左红外信号</el-checkbox>
+                            <el-checkbox v-model="isRightRecieverRecievedLeftCenterIRData">左中红外外信号</el-checkbox>
+                            <el-checkbox v-model="isRightRecieverRecievedRightCenterIRData">右中红外信号</el-checkbox>
+                            <el-checkbox v-model="isRightRecieverRecievedRightIRData">右红外信号</el-checkbox>
+                        </div>
+                    </div>
+
+                    <div class="right-section">
+                        <div class="buttons-row">
+                            <div class="btn-container">
+                                <div class="divider"></div>
+                                <el-descriptions title="风机档位设置:"></el-descriptions>
+                                <div class="clean-level-container">
+                                    <el-select v-model="selectedCleanMotorLevel" placeholder="请设置风机档位"
+                                        @change="handleCleanMotorLevelChange">
+                                        <el-option v-for="key in CleanLevelList" :key="key.level" :label="key.label"
+                                            :value="key.level"></el-option>
+                                    </el-select>
+                                    <el-button @click="buttonSwitchCleanMotorLevelClicked">设置风机档位</el-button>
+                                </div>
+                                <div class="divider"></div>
+                                <el-descriptions title="水箱电机标准档位设置:"></el-descriptions>
+                                <div class="water-level-container">
+                                    <el-select v-model="selectedWaterMotorLevel" placeholder="请设置吸水电机档位"
+                                        @change="handleWaterMotorLevelChange">
+                                        <el-option v-for="key in WaterLevelList" :key="key.level" :label="key.label"
+                                            :value="key.level"></el-option>
+                                    </el-select>
+                                    <el-button @click="buttonSwitchWaterMotorLevelClicked">设置吸水电机档位</el-button>
+                                </div>
+                                <div class="divider"></div>
+                                <el-descriptions title="自定义水箱电机档位设置:"></el-descriptions>
+                                <div>
+                                    <el-input v-model="stop_time" class="custom-input" placeholder="输入关闭时间" clearable>
+                                        <template slot="append">出水周期ms</template>
+                                    </el-input>
+                                </div>
+                                <div>
+                                    <el-input v-model="work_time" class="custom-input" placeholder="输入出水时间" clearable>
+                                        <template slot="append">出水时间ms</template>
+                                    </el-input>
+                                    <el-button
+                                        @click="buttonSelfDesignSwitchWaterMotorLevelClicked">设置自定义电机档位</el-button>
+                                </div>
+                                <div class="divider"></div>
+                                <el-descriptions title="滚刷电机档位设置:"></el-descriptions>
+                                <div class="roller-level-container">
+                                    <el-select v-model="selectedRollerMotorLevel" placeholder="请设置滚刷电机档位"
+                                        @change="handleRollerMotorLevelChange">
+                                        <el-option v-for="key in RollerLevelList" :key="key.level" :label="key.label"
+                                            :value="key.level"></el-option>
+                                    </el-select>
+                                    <el-button @click="buttonSwitchRollerMotorLevelClicked">设置滚刷电机档位</el-button>
+                                </div>
+                                <div class="divider"></div>
+                                <el-descriptions title="传感器标定设置:"></el-descriptions>
+                                <el-button @click="GetMcuVersionClicked">获取下位机当前版本号和标定信息</el-button>
+                                <div class="divider"></div>
+                                <el-table :data="MCUVersion">
+                                    <el-table-column prop="hardware_version" label="mcu硬件版本号"></el-table-column>
+                                    <el-table-column prop="software_version" label="mcu软件版本号"></el-table-column>
+                                </el-table>
+                                <el-table :data="CliffCalibration">
+                                    <el-table-column prop="cliff1_calibrate" label="左侧已标定"></el-table-column>
+                                    <el-table-column prop="cliff_value1" label="左侧地检标定值"></el-table-column>
+
+                                    <el-table-column prop="cliff2_calibrate" label="前侧左中已标定"></el-table-column>
+                                    <el-table-column prop="cliff_value2" label="前侧左中标定值"></el-table-column>
+
+                                    <el-table-column prop="cliff3_calibrate" label="前侧右中已标定"></el-table-column>
+                                    <el-table-column prop="cliff_value3" label="前侧右中标定值"></el-table-column>
+
+                                    <el-table-column prop="cliff4_calibrate" label="右侧已标定"></el-table-column>
+                                    <el-table-column prop="cliff_value4" label="右侧地检标定值"></el-table-column>
+                                </el-table>
+                                <div class="divider"></div>
+                                <el-table :data="TofLeft">
+                                    <el-table-column prop="offset_valid" label="左侧TOF_offset_valid"></el-table-column>
+                                    <el-table-column prop="offset" label="左侧TOF_offset"></el-table-column>
+
+                                    <el-table-column prop="xcross_valid" label="左侧TOF_xcross_valid"></el-table-column>
+                                    <el-table-column prop="xcross" label="左侧TOF_xcross"></el-table-column>
+                                </el-table>
+
+                                <el-table :data="TofRight">
+                                    <el-table-column prop="offset_valid" label="右侧TOF_offset_valid"></el-table-column>
+                                    <el-table-column prop="offset" label="右侧TOF_offset"></el-table-column>
+
+                                    <el-table-column prop="xcross_valid" label="右侧TOF_xcross_valid"></el-table-column>
+                                    <el-table-column prop="xcross" label="右侧TOF_xcross"></el-table-column>
+                                </el-table>
+
+
+                                <el-descriptions title="悬崖传感器标定:"></el-descriptions>
+                                <el-button @click="StartCliffCalibrationClicked">开始标定悬崖传感器</el-button>
+                                <div class="divider"></div>
+                                <el-descriptions title="悬崖传感器实时数据:"></el-descriptions>
+                                <el-table :data="RealtimeCliffData">
+                                    <el-table-column prop="cliff_value1" label="左侧地检实时数据"></el-table-column>
+                                    <el-table-column prop="cliff_value2" label="前侧左中地检实时数据"></el-table-column>
+                                    <el-table-column prop="cliff_value3" label="前侧右中地检实时数据"></el-table-column>
+                                    <el-table-column prop="cliff_value4" label="右侧地检实时数据"></el-table-column>
+                                </el-table>
+                                <div class="divider"></div>
+                                <el-button @click="StopCliffCalibrationClicked">停止标定悬崖传感器</el-button>
+                                <div class="divider"></div>
+                                <el-descriptions title="悬崖传感器实时数据平均值:"></el-descriptions>
+                                <el-table :data="RealtimeCliffCaculateData">
+                                    <el-table-column prop="cliff_value1" label="左侧地检实时数据平均值"></el-table-column>
+                                    <el-table-column prop="cliff_value2" label="前侧左中地检实时数据平均值"></el-table-column>
+                                    <el-table-column prop="cliff_value3" label="前侧右中地检实时数据平均值"></el-table-column>
+                                    <el-table-column prop="cliff_value4" label="右侧地检实时数据平均值"></el-table-column>
+                                </el-table>
+                                <div class="divider"></div>
+                                <el-button @click="ConfigCliffCalibrationClicked">配置悬崖传感器标定值</el-button>
+                                <el-button @click="ResetCliffCalibrationClicked">重置悬崖传感器标定值为默认值</el-button>
+                                <div class="divider"></div>
+                                <el-descriptions title="ToF标定:"></el-descriptions>
+                                <el-button
+                                    @click="StartTofOffsetCalibrationClicked">开始ToF传感器Offset自标定(点击后2s内自动完成标定)</el-button>
+                                <el-button @click="ResetTofOffsetCalibrationClicked">重置oF传感器Offset值为默认值</el-button>
+
+                                <el-button
+                                    @click="StartTofXcrossCalibrationClicked">开始ToF传感器Xcross自标定(点击后2s内自动完成标定)</el-button>
+                                <el-button @click="ResetTofXcrossCalibrationClicked">重置toF传感器Xcross值为默认值</el-button>
+                                <div class="divider"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="日志信息" name="logs">
+                <div class="logs-content">
+                    <div class="left-section">
+                        <div class="log-container">
+                            <div class="log-list">
+                                <div class="log-item" v-for="(log, index) in logList" :key="index">
+                                    <div class="log-time">{{ log.time }}</div>
+                                    <div class="log-message">{{ log.message }}</div>
+                                </div>
+                            </div>
+                            <div class="clear-logs">
+                                <el-button @click="clearLogs">清空日志</el-button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </el-tab-pane>
+        </el-tabs>
+
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    activeTab: 'advanced',    // 默认选中的 Tab
+                    selectedMap: null,          // 存储选中的地图
+                    selectedMap_id: null, //
+                    selectedMap_name: null, //
+                    mapList: [
+                    ],              // 存储地图列表
+                    selectedImage: '',        // 存储选中的图片路径
+                    logSlider: 0,             // 日志滑块位置
+                    logList: [],              // 存储日志列表
+                    inputNewMapName: '',      // 新建地图的地图名
+                    localizaitonKeyDisabled: false, //按键禁用控制
+                    realtimeData: [
+                        { machine_name: 'FS', status: 0, x: 0, y: 0, yaw: 0 },
+                    ],
+                    linearSpeed: 0.2,      // Linear speed value (0~0.5m/s)
+                    angularSpeed: 0.2,    // Angular speed value (0~2rad/s)
+                    moveInterval: null, // Interval for continuous movement
+                    RoomRealtimeData: [
+                        { clean_mode: 0, clean_status: 0, x: 0, y: 0, yaw: 0 },
+                    ],
+
+                    GlobaltableData: [
+                        { clean_mode: 0, immediate_cleaning: true, suction_level: 0, water_level: 0, repeat: false, exploration_slamming: false, fast_clean: false },
+                    ],
+
+                    RoomtableData: [
+                        // { name: 'room1', id: 0, order: 1, clean_mode: 0, suction_level: 0, water_level: 0, repeat: false },
+                        // { name: 'room2', id: 1, order: 2, clean_mode: 0, suction_level: 0, water_level: 0, repeat: true },
+                    ],
+
+                    order_options: [
+                        { order: 1, label: '1' },
+                        { order: 2, label: '2' },
+                        { order: 3, label: '3' },
+                        { order: 4, label: '4' },
+                        { order: 5, label: '5' },
+                        { order: 6, label: '6' },
+                        { order: 7, label: '7' },
+                        { order: 8, label: '8' },
+                        { order: 9, label: '9' },
+                    ],
+
+                    id_options: [
+                        { id: 0, label: '0' },
+                        { id: 1, label: '1' },
+                        { id: 2, label: '2' },
+                        { id: 3, label: '3' },
+                        { id: 4, label: '4' },
+                        { id: 5, label: '5' },
+                        { id: 6, label: '6' },
+                        { id: 7, label: '7' },
+                        { id: 8, label: '8' },
+                        { id: 9, label: '9' },
+                    ],
+
+
+                    clean_mode_options: [
+                        { clean_mode: 0, label: '仅清扫' },
+                        { clean_mode: 1, label: '扫拖' },
+                        { clean_mode: 2, label: '仅拖地' }
+                    ],
+                    suction_level_options: [
+                        { suction_level: 0, label: '安静' },
+                        { suction_level: 1, label: '标准' },
+                        { suction_level: 2, label: '中档' },
+                        { suction_level: 3, label: '强力' }
+                    ],
+                    water_level_options: [
+                        { water_level: 0, label: '1挡' },
+                        { water_level: 1, label: '2挡' },
+                        { water_level: 2, label: '3挡' },
+                    ],
+
+                    repeat_options: [
+                        { repeat: false, label: '单次' },
+                        { repeat: true, label: '重复' },
+                    ],
+                    fast_clean_options: [
+                        { fast_clean: false, label: '关闭' },
+                        { fast_clean: true, label: '打开' },
+                    ],
+
+                    immediate_cleaning_options: [
+                        { immediate_cleaning: false, label: '不清扫' },
+                        { immediate_cleaning: true, label: '立即清扫' },
+                    ],
+
+                    exploration_slamming_options: [
+                        { exploration_slamming: true, label: '打开' },
+                        { exploration_slamming: false, label: '关闭' },
+                    ],
+                    imageSrc: null,
+
+                    // 实时mcu数据显示：
+                    MCUVersion: [
+                        { hardware_version: 'unknown', software_version: 'unknown' },
+                    ],
+                    CliffCalibration: [
+                        { cliff1_calibrate: '未知', cliff_value1: 0xffff, cliff2_calibrate: '未知', cliff_value2: 0xffff, cliff3_calibrate: '未知', cliff_value3: 0xffff, cliff4_calibrate: '未知', cliff_value4: 0xffff },
+                    ],
+
+                    RealtimeCliffData: [
+                        { cliff_value1: 0xffff, cliff_value2: 0xffff, cliff_value3: 0xffff, cliff_value4: 0xffff },
+                    ],
+
+                    RealtimeCliffCaculateData: [
+                        { cliff_value1: 0xffff, cliff_value2: 0xffff, cliff_value3: 0xffff, cliff_value4: 0xffff },
+                    ],
+
+                    TofLeft: [
+                        { offset_valid: 0, xcross_valid: 0, offset: 0, xcross: 0 },
+                    ],
+                    TofRight: [
+                        { offset_valid: 0, xcross_valid: 0, offset: 0, xcross: 0 },
+                    ],
+                    VL6180: [
+                        { left_distance: 0, right_distance: 0 },
+                    ],
+                    MotorDriver: [
+                        { left_moter_current: 0, right_moter_current: 0, left_encode: 0, right_encode: 0, run_fsm_state: 0, motor_mode: 0 },
+                    ],
+
+                    Odom: [
+                        { odom_x: 0.0, odom_y: 0.0, odom_yaw: 0.0 },
+                    ],
+                    IMU: [
+                        { imu_x: 0.0, imu_y: 0.0, imu_yaw: 0.0 },
+                    ],
+                    SensorDetect: [
+                        { cliff_detect_status: 0, collide_detect_status: 0, dangling_detect_status: 0 },
+                    ],
+
+                    Battery: [
+                        { charge_status: 0, in_pipe_status: 0, battery_percent: 0, battery_current: 0, battery_voltage: 0 },
+                    ],
+
+                    WaterBox: [
+                        { dust_box_pos: 0, mop_in_pos: 0, lack_water: 0, water_full: 0 },
+                    ],
+                    Infra: [
+                        { ira_recharge_fl: 0, ira_recharge_fr: 0, ira_recharge_rr: 0 },
+                    ],
+                    cacheKey: 0,
+                    mapUpdateInterval: null, // Interval for continuous movement
+                    selectedCleanMotorLevel: null,          // 存储选中的地图
+                    CleanLevelList: [
+                        { level: 255, label: '不设置' },
+                        { level: 0, label: '关闭风机' },
+                        { level: 10, label: '10%' },
+                        { level: 20, label: '20%' },
+                        { level: 30, label: '30%' },
+                        { level: 40, label: '40%' },
+                        { level: 50, label: '50%' },
+                        { level: 60, label: '60%' },
+                        { level: 70, label: '70%' },
+                        { level: 80, label: '80%' },
+                        { level: 90, label: '90%' },
+                        { level: 100, label: '100%' },
+                    ],
+                    selectedWaterMotorLevel: null,
+                    WaterLevelList: [
+                        { level: 255, label: '不设置' },
+                        { level: 0, label: '档位0:关闭水泵' },
+                        { level: 1, label: '档位1:周期2000ms,出水110ms' },
+                        { level: 2, label: '档位2:周期2000ms,出水220ms' },
+                        { level: 3, label: '档位3:周期10000ms,出水5000ms' },
+                    ],
+                    selectedRollerMotorLevel: null,
+                    RollerLevelList: [
+                        { level: 255, label: '不设置' },
+                        { level: 0, label: '关闭滚刷' },
+                        { level: 10, label: '10%' },
+                        { level: 20, label: '20%' },
+                        { level: 30, label: '30%' },
+                        { level: 40, label: '40%' },
+                        { level: 50, label: '50%' },
+                        { level: 60, label: '60%' },
+                        { level: 70, label: '70%' },
+                        { level: 80, label: '80%' },
+                        { level: 90, label: '90%' },
+                        { level: 100, label: '100%' },
+                    ],
+                    run_distance: 500,
+                    turn_angle: 180,
+                    stop_time: 2000,
+                    work_time: 200,
+
+                    isLeftCenterRecieverRecievedLeftIRData: false,
+                    isLeftCenterRecieverRecievedLeftCenterIRData: false,
+                    isLeftCenterRecieverRecievedRightCenterIRData: false,
+                    isLeftCenterRecieverRecievedRightIRData: false,
+
+                    isRightCenterRecieverRecievedLeftIRData: false,
+                    isRightCenterRecieverRecievedLeftCenterIRData: false,
+                    isRightCenterRecieverRecievedRightCenterIRData: false,
+                    isRightCenterRecieverRecievedRightIRData: false,
+
+                    isRightRecieverRecievedLeftIRData: false,
+                    isRightRecieverRecievedLeftCenterIRData: false,
+                    isRightRecieverRecievedRightCenterIRData: false,
+                    isRightRecieverRecievedRightIRData: false,
+                };
+            },
+            methods: {
+
+                handleMapChange() {
+                    console.log('Selected Map:', this.selectedMap);
+                    console.log(this.mapList.length);
+                    for (var i = 0; i < this.mapList.length; i++) {
+                        var map = this.mapList[i];
+                        console.log("map_name = " + map.name, "map_id = " + map.id);
+                        if (this.selectedMap == map.id) {
+                            this.selectedMap_name = map.name;
+                            this.selectedMap_id = map.id;
+                        }
+                        // 在这里可以对每个 map 对象进行进一步的操作
+                    }
+                    console.log('Selected Map.name:' + this.selectedMap_name + ' id:' + this.selectedMap_id);
+                },
+
+                handleCleanMotorLevelChange() {
+                    console.log('Selected clean_motor level:', this.selectedCleanMotorLevel);
+                },
+                buttonSwitchCleanMotorLevelClicked() {
+                    console.log('设置风机档位为: ', this.selectedCleanMotorLevel);
+                    var clean_level_request = {
+                        channel: "common_motor",
+                        cleanner_motor: this.selectedCleanMotorLevel
+                    };
+                    this.sendData(JSON.stringify(clean_level_request)); // 发送数据
+                },
+
+                buttonStartMapping() {
+                    console.log('开始建图: ');
+                    var mapping_request = {
+                        channel: "start_mapping",
+                        map_name: "map0"
+                    };
+                    this.sendData(JSON.stringify(mapping_request)); // 发送数据
+
+                    //< 定时请求地图数据
+                    this.updateMap();
+                },
+                buttonCancelMapping() {
+                    console.log('取消建图: ');
+                    var cancel_request = {
+                        channel: "cancel_mapping",
+                    };
+                    this.sendData(JSON.stringify(cancel_request)); // 发送数据
+                },
+
+                buttonSaveMap() {
+                    console.log('保存地图: ');
+                    var save_map_request = {
+                        channel: "save_map",
+                    };
+                    this.sendData(JSON.stringify(save_map_request)); // 发送数据
+                },
+                buttonStartLocalization() {
+                    console.log('开始定位: ');
+                    var localization_request = {
+                        channel: "start_localization",
+                        map_name: "map0"
+                    };
+                    this.sendData(JSON.stringify(localization_request)); // 发送数据
+                },
+                buttonStopLocalization() {
+                    console.log('取消定位: ');
+                    var localization_request = {
+                        channel: "stop_localization",
+                    };
+                    this.sendData(JSON.stringify(localization_request)); // 发送数据
+                },
+                buttonMapAlign() {
+                    console.log('地图摆正: ');
+                    var localization_request = {
+                        channel: "map_align",
+                    };
+                    this.sendData(JSON.stringify(localization_request)); // 发送数据
+                },
+
+                handleRollerMotorLevelChange() {
+                    console.log('Selected roller_motor level:', this.selectedRollerMotorLevel);
+                },
+                buttonSwitchRollerMotorLevelClicked() {
+                    console.log('设置滚刷档位为: ', this.selectedRollerMotorLevel);
+                    var clean_level_request = {
+                        channel: "common_motor",
+                        roll_brush_motor: this.selectedRollerMotorLevel
+                    };
+                    this.sendData(JSON.stringify(clean_level_request)); // 发送数据
+                },
+
+                handleWaterMotorLevelChange() {
+                    console.log('Selected water_motor level:', this.selectedWaterMotorLevel);
+                },
+                resetCache() {
+                    this.cacheKey++
+                },
+                buttonSwitchWaterMotorLevelClicked() {
+                    console.log('设置吸水电机档位为: ', this.selectedWaterMotorLevel);
+                    var clean_level_request = {
+                        channel: "common_motor",
+                        water_tank_motor: this.selectedWaterMotorLevel
+                    };
+                    this.sendData(JSON.stringify(clean_level_request)); // 发送数据
+                },
+
+                buttonSelfDesignSwitchWaterMotorLevelClicked() {
+
+                    if (isNaN(this.work_time)) {
+                        console.log("work_time is not a number");
+                        this.$message.error('work_time 不是一个整数，请检查输入');
+                        return;
+                    }
+                    if (isNaN(this.stop_time)) {
+                        console.log("stop_time is not a number");
+                        return;
+                    }
+                    // 执行按钮点击后的逻辑
+                    // 这里可以获取 this.stop_time 和 this.work_time 作为整数值
+                    var clean_level_request = {
+                        channel: "common_motor",
+                        water_tank_motor: 254,
+                        water_pump_work_time: parseInt(this.work_time),
+                        water_pump_stop_time: parseInt(this.stop_time)
+                    };
+                    this.sendData(JSON.stringify(clean_level_request)); // 发送数据
+                    console.log('water_pump_work_time:', this.work_time);
+                    console.log('water_pump_stop_time:', this.stop_time);
+                },
+
+                buttonSelfDesignStepRunClicked() {
+                    if (isNaN(this.run_distance)) {
+                        console.log("run_distance is not a number");
+                        this.$message.error('run_distance 不是一个整数，请检查输入');
+                        return;
+                    }
+
+                    // 执行按钮点击后的逻辑
+                    // 这里可以获取 this.stop_time 和 this.work_time 作为整数值
+                    var step_run_request = {
+                        channel: "speed",
+                        mode: 1,
+                        v_left: this.linearSpeed,
+                        v_right: this.linearSpeed,
+                        target_distance: this.run_distance
+                    };
+                    this.sendData(JSON.stringify(step_run_request)); // 发送数据
+                    console.log('run_distance:', this.work_time);
+                },
+
+
+                buttonSelfDesignStepTurnClicked() {
+                    if (isNaN(this.turn_angle)) {
+                        console.log("turn_angle is not a number");
+                        this.$message.error('turn_angle 不是一个整数，请检查输入');
+                        return;
+                    }
+
+                    // 执行按钮点击后的逻辑
+                    // 这里可以获取 this.stop_time 和 this.work_time 作为整数值
+                    var left_value = -0.5 * 0.24 * this.angularSpeed;
+                    var right_value = 0.5 * 0.24 * this.angularSpeed;
+                    console.log('left_value = ', left_value);
+                    console.log('right_value = ', right_value);
+                    var req = {
+                        channel: "speed",
+                        mode: 1,
+                        v_left: left_value,
+                        v_right: right_value,
+                        target_angular: this.turn_angle
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                    console.log('turn_angle:', this.turn_angle);
+                },
+
+                fetchMapList() {
+                    console.log('获取地图列表按钮点击');
+                    // if (this.mapList.length <= 0) {
+                    //     console.log('地图列表为空,禁用定位按钮');
+                    //     this.localizaitonKeyDisabled = true;
+                    // }
+                    // 在这里添加获取地图列表的事件处理逻辑
+                    var maplist_request = {
+                        channel: "maplist",
+                        param: ""
+                    };
+                    this.sendData(JSON.stringify(maplist_request)); // 发送数据
+                },
+
+                OpenUpdateMap()
+                {
+                    console.log("open map update");
+                    this.mapUpdateInterval = setInterval(() => {
+                        this.updateMap();
+                    }, 100); // Adjust the interval as desired
+                },
+
+                CloseUpdateMap()
+                {
+                    clearInterval(this.mapUpdateInterval);
+                },
+
+                // Header header # 消息时间戳/序列号
+                // uint8 act  # 0-stop ,1-start,2-pause,3-resume
+                // uint8 type # 0-auto 自动 ,1-border 沿边 ,2-singleRoom 单房间 ,3-spotArea 区域, 4-spot 定点, 5-customArea 画区 
+                // int32[] rooms # room id array  区域清扫需要 
+
+                buttonStartClean() {
+                    console.log('buttonStartClean');
+                    var task_request = {
+                        channel: "clean_task_request",
+                        act: 1,
+                        type: 0
+                    };
+                    this.sendData(JSON.stringify(task_request)); // 发送数据
+                },
+                buttonPauseClean() {
+                    console.log('buttonPauseClean');
+                    var task_request = {
+                        channel: "clean_task_request",
+                        act: 2,
+                        type: 0
+                    };
+                    this.sendData(JSON.stringify(task_request)); // 发送数据
+                },
+                buttonResumeClean() {
+                    console.log('buttonResumeClean');
+                    var task_request = {
+                        channel: "clean_task_request",
+                        act: 3,
+                        type: 0
+                    };
+                    this.sendData(JSON.stringify(task_request)); // 发送数据
+                },
+                buttonStopClean() {
+                    console.log('buttonStopClean');
+                    var task_request = {
+                        channel: "clean_task_request",
+                        act: 0,
+                        type: 0
+                    };
+                    this.sendData(JSON.stringify(task_request)); // 发送数据
+                },
+
+                updateMap() {
+                    console.log("start update map");
+                    // 发送请求,获取新的地图数据
+                    fetch('/get_picture')
+                        .then(response => response.blob())
+                        .then(blob => {
+                            // 处理返回的地图数据,并更新地图显示
+                            const imageUrl = URL.createObjectURL(blob);
+                            this.imageSrc = imageUrl;
+                        })
+                        .catch(error => {
+                            console.error('更新地图失败:', error);
+                        });
+                },
+
+                buttonCancelLocalizationClicked() {
+                    console.log('buttonCancelLocalizationClicked');
+                    var slam_req = {
+                        channel: "cancel_localization",
+                        param: ""
+                    };
+                    this.sendData(JSON.stringif(slam_req)); // 发送数据
+                },
+                buttonStartLocalizationClicked() {
+                    console.log('buttonStartLocalizationClicked');
+                    var slam_req = {
+                        channel: "start_localization",
+                        param: ""
+                    };
+                    this.sendData(JSON.stringify(slam_req)); // 发送数据
+                },
+                buttonPauseLocalizationClicked() {
+                    console.log('buttonPauseLocalizationClicked');
+                    var slam_req = {
+                        channel: "stop_localization",
+                        param: ""
+                    };
+                    this.sendData(JSON.stringify(slam_req)); // 发送数据
+                },
+                buttonUpdateMapClicked() {
+                    console.log('buttonUpdateMapClicked');
+                    // buttonUpdateMapClicked
+                },
+
+                buttonCancelMappingClicked() {
+                    console.log('buttonCancelMappingClicked');
+                    var slam_req = {
+                        channel: "cancel_mapping",
+                        param: ""
+                    };
+                    this.sendData(JSON.stringify(slam_req)); // 发送数据
+                },
+                buttonPauseMappingClicked() {
+                    console.log('buttonPauseMappingClicked');
+                    var slam_req = {
+                        channel: "pause_mapping",
+                        param: ""
+                    };
+                    this.sendData(JSON.stringify(slam_req)); // 发送数据
+                },
+                buttonContinueMappingClicked() {
+                    console.log('buttonContinueMappingClicked');
+                    var slam_req = {
+                        channel: "continue_mapping",
+                        param: ""
+                    };
+                    this.sendData(JSON.stringify(slam_req)); // 发送数据
+                },
+
+                buttonSaveMapClicked() {
+                    console.log('buttonSaveMapClicked');
+                    var slam_req = {
+                        channel: "save_map",
+                        param: {
+
+                        }
+                    };
+                    this.sendData(JSON.stringify(slam_req)); // 发送数据
+                },
+
+                buttonNewMappingClicked() {
+                    console.log('开始新建地图,地图名: ' + this.inputNewMapName);
+                    // buttonNewMappingClicked
+                },
+
+                //< 快速建图接口
+                buttonStartFastSlamClicked() {
+                    console.log('buttonStartFastSlamClicked');
+                    var req = {
+                        channel: "master_command",
+                        enable_fast_slam: true,
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                buttonPauseFastSlamClicked() {
+                    console.log('buttonPauseFastSlamClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 2
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                buttonContinueFastSlamClicked() {
+                    console.log('buttonContinueFastSlamClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 3
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                buttonStopFastSlamClicked() {
+                    console.log('buttonStopFastSlamClicked');
+                    var req = {
+                        channel: "master_command",
+                        enable_fast_slam: false,
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                clearLogs() {
+                    console.log('清空日志按钮点击');
+                    this.logList = [];
+                },
+                addLog(message) {
+                    const vm = this;
+                    const time = new Date().toLocaleTimeString();
+                    vm.logList.push({ time, message });
+
+                },
+                ///< 清扫管理按钮接口
+                buttonStartGloabalCleanClicked() {
+                    console.log('buttonStartGloabalCleanClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 1,
+                        start_params:
+                        {
+                            task_id: 100,
+                            type: 1, //< 全局清扫
+                            mode: this.GlobaltableData[0].clean_mode,
+                            suction: this.GlobaltableData[0].suction_level,
+                            water_level: this.GlobaltableData[0].water_level,
+                            repeat_sweeping: this.GlobaltableData[0].repeat,
+                            exploration_to_sweeping: this.GlobaltableData[0].immediate_cleaning,
+                            exploration_slam: this.GlobaltableData[0].exploration_slamming,
+                            fast_clean: this.GlobaltableData[0].fast_clean,
+                            map_id: 100,
+                        }
+                    };
+                    var stringData = JSON.stringify(req);
+                    console.log("stringData.length = " + stringData.length);
+                    this.sendData(stringData); // 发送数据
+                },
+                buttonSwitchAndLoadRoomParamClicked() {
+                    console.log('buttonSwitchAndLoadRoomParamClicked');
+                    var req = {
+                        channel: "map_operation",
+                        params:
+                        {
+                            type: 5,
+                            map_info:
+                            {
+                                name: this.selectedMap_name,
+                                id: this.selectedMap_id,
+                            }
+                        }
+                    };
+                    console.log("selectedMap.name = " + this.selectedMap_name + "id = " + this.selectedMap_id);
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+                buttonStartRoomCleanClicked() {
+                    console.log('buttonStartRoomCleanClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 1,
+                        start_params:
+                        {
+                            task_id: 100,
+                            type: 2, //< 全局清扫
+                            mode: 0,
+                            suction: 0,
+                            water_level: 0,
+                            repeat_sweeping: false,
+                            exploration_to_sweeping: false,
+                            exploration_slam: false,
+                            fast_clean: false,
+                            map_id: 100,
+                            room_units: [],
+                        }
+                    };
+                    console.log("================================");
+                    var arraySize = this.RoomtableData.length;
+                    console.log("arraySize: " + arraySize)
+                    for (var i = 0; i < arraySize; i++) {
+                        var sweep_count = 1;
+                        if (this.RoomtableData[i].repeat) {
+                            sweep_count = 2;
+                            console.log("sweep_count: " + sweep_count)
+                        }
+                        var element = { id: this.RoomtableData[i].id, order: this.RoomtableData[i].order, mode: this.RoomtableData[i].clean_mode, suction_level: this.RoomtableData[i].suction_level, water_level: this.RoomtableData[i].water_level, sweep_times: sweep_count, fast_clean: this.RoomtableData[i].fast_clean };
+                        req.start_params.room_units.push(element);
+                        console.log(element);
+                    }
+
+                    var stringData = JSON.stringify(req);
+                    console.log("stringData.length = " + stringData.length);
+                    this.sendData(stringData); // 发送数据
+                },
+
+                buttonStartPointCleanClicked() {
+                    console.log('buttonStartPointCleanClicked');
+                    var req = {
+                        channel: "sweep_command",
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+                buttonStartAreaCleanClicked() {
+                    console.log('buttonStartAreaCleanClicked');
+                    var req = {
+                        channel: "sweep_command",
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                buttonPaseSweepingClicked() {
+                    console.log('buttonPaseSweepingClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 2,
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                buttonContinueSweepingClicked() {
+                    console.log('buttonContinueSweepingClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 3,
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                buttonCancelSweepingClicked() {
+                    console.log('buttonCancelSweepingClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 4,
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                buttonStartDockingClicked() {
+                    console.log('buttonStartDockingClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 9,
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                buttonStopDockingClicked() {
+                    console.log('buttonStopDockingClicked');
+                    var req = {
+                        channel: "sweep_command",
+                        type: 10,
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                ///< 房间清扫参数管理
+                addRow() {
+                    this.RoomtableData.push({ name: `Room${this.RoomtableData.length + 1}`, order: 1, clean_mode: 0, suction_level: 0, water_level: 0, repeat: false, fast_clean: false });
+                },
+                deleteRow(index) {
+                    this.RoomtableData.splice(index, 1);
+                },
+                // 运动控制函数
+                startMove(direction) {
+                    this.moveInterval = setInterval(() => {
+                        // Execute continuous movement based on the direction
+                        // console.log(direction);
+                        this.move(direction);
+                    }, 100); // Adjust the interval as desired
+                },
+                stopMove() {
+
+                    clearInterval(this.moveInterval);
+                    console.log('StopMovement');
+                    var req = {
+                        channel: "speed",
+                        mode: 0,
+                        v_left: 0.0,
+                        v_right: 0.0
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+
+                    console.log('StopMovement');
+                    var req = {
+                        channel: "speed",
+                        mode: 0,
+                        v_left: 0.0,
+                        v_right: 0.0
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                    this.updateMap();
+                },
+                move(direction) {
+                    if (direction === 'up') {
+                        // 处理向上按钮的响应逻辑
+                        console.log('buttonUpClicked');
+                        var req = {
+                            channel: "speed",
+                            mode: 2,
+                            v_left: this.linearSpeed,
+                            v_right: this.linearSpeed
+                        };
+                        this.sendData(JSON.stringify(req)); // 发送数据
+
+                    } else if (direction === 'left') {
+                        // 处理向左按钮的响应逻辑
+                        console.log('buttonLeftClicked');
+                        var left_value = -0.5 * 0.24 * this.angularSpeed;
+                        var right_value = 0.5 * 0.24 * this.angularSpeed;
+                        console.log('left_value = ', left_value);
+                        console.log('right_value = ', right_value);
+                        var req = {
+                            channel: "speed",
+                            mode: 2,
+                            v_left: left_value,
+                            v_right: right_value
+                        };
+                        this.sendData(JSON.stringify(req)); // 发送数据
+                    } else if (direction === 'right') {
+                        // 处理向右按钮的响应逻辑
+                        console.log('buttonRightClicked');
+                        var req = {
+                            channel: "speed",
+                            mode: 2,
+                            v_left: 0.5 * 0.24 * this.angularSpeed,
+                            v_right: -0.5 * 0.24 * this.angularSpeed
+                        };
+                        this.sendData(JSON.stringify(req)); // 发送数据
+                    } else if (direction === 'down') {
+                        // 处理向下按钮的响应逻辑
+                        console.log('buttonDownClicked');
+                        var req = {
+                            channel: "speed",
+                            mode: 2,
+                            v_left: -this.linearSpeed,
+                            v_right: -this.linearSpeed
+                        };
+                        this.sendData(JSON.stringify(req)); // 发送数据
+                    }
+                    this.updateMap();
+                },
+                GetMcuVersionClicked() {
+                    console.log('GetMcuVersionClicked');
+                    var req = {
+                        channel: "get_version",
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                StartCliffCalibrationClicked() {
+                    console.log('StartCliffCalibrationClicked');
+                    this.RealtimeCliffData.cliff_value1 = 0xffff;
+                    this.RealtimeCliffData.cliff_value2 = 0xffff;
+                    this.RealtimeCliffData.cliff_value3 = 0xffff;
+                    this.RealtimeCliffData.cliff_value4 = 0xffff;
+
+                    this.RealtimeCliffCaculateData.cliff_value1 = 0xffff;
+                    this.RealtimeCliffCaculateData.cliff_value2 = 0xffff;
+                    this.RealtimeCliffCaculateData.cliff_value3 = 0xffff;
+                    this.RealtimeCliffCaculateData.cliff_value4 = 0xffff;
+                    var req = {
+                        channel: "calibration",
+                        cmd: 1,
+                        type: 0xff,
+                        params: 1
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+
+                },
+                StopCliffCalibrationClicked() {
+                    console.log('StopCliffCalibrationClicked');
+                    var req = {
+                        channel: "calibration",
+                        cmd: 1,
+                        type: 0xff,
+                        params: 0
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                ConfigCliffCalibrationClicked() {
+                    console.log('ConfigCliffCalibrationClicked');
+                    var req = {
+                        channel: "calibration",
+                        cmd: 0,
+                        type: 0xff,
+                        params: 0
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                ResetCliffCalibrationClicked() {
+                    console.log('ResetCliffCalibrationClicked');
+                    var req = {
+                        channel: "calibration",
+                        cmd: 3,
+                        type: 0,//< 软件层依次下位重置所有悬崖传感器
+                        params: 0
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+                StartTofOffsetCalibrationClicked() {
+                    console.log('StartTofOffsetCalibrationClicked');
+                    var req = {
+                        channel: "calibration",
+                        cmd: 2,
+                        type: 8,
+                        params: 1
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+                ResetTofOffsetCalibrationClicked() {
+                    console.log('ResetTofOffsetCalibrationClicked');
+                    var req = {
+                        channel: "calibration",
+                        cmd: 3,
+                        type: 8,
+                        params: 0
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+
+                StartTofXcrossCalibrationClicked() {
+                    console.log('StartTofOffsetCalibrationClicked');
+                    var req = {
+                        channel: "calibration",
+                        cmd: 2,
+                        type: 9,
+                        params: 1
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+                ResetTofXcrossCalibrationClicked() {
+                    console.log('ResetTofXcrossCalibrationClicked');
+                    var req = {
+                        channel: "calibration",
+                        cmd: 3,
+                        type: 9,
+                        params: 0
+                    };
+                    this.sendData(JSON.stringify(req)); // 发送数据
+                },
+                sendData(data) {
+                    console.log(data);
+                    const maxFrameSize = 110; // 最大数据帧大小为110字节
+                    const dataSize = data.length;
+                    if (dataSize > 125) {
+                        console.log("data to send length: " + dataSize);
+                        const numFrames = Math.ceil(dataSize / maxFrameSize);
+                        for (let i = 0; i < numFrames; i++) {
+                            const start = i * maxFrameSize;
+                            const end = start + maxFrameSize;
+                            const frameData = new TextEncoder().encode(data.slice(start, end));
+
+                            const frameHeader = new Uint8Array(6);
+                            frameHeader[0] = 0xff; // 帧头起始码 - 第一个字节
+                            frameHeader[1] = 0xee; // 帧头起始码 - 第二个字节
+                            frameHeader[2] = (dataSize >> 8) & 0xff; // 数据总长度高字节
+                            frameHeader[3] = dataSize & 0xff; // 数据总长度低字节
+                            frameHeader[4] = frameData.length; // 当前帧长度
+                            frameHeader[5] = i & 0xff; // 帧ID
+
+                            const frameToSend = new Uint8Array(frameHeader.length + frameData.length);
+                            frameToSend.set(frameHeader);
+                            frameToSend.set(frameData, frameHeader.length);
+                            this.socket.send(frameToSend);
+                        }
+                    }
+                    else {
+                        console.log("data to send length: " + dataSize);
+                        console.log("data to send: " + data);
+                        const frameHeader = new Uint8Array(6);
+                        var total_length = dataSize + 6;
+                        console.log("1");
+                        frameHeader[0] = 0xff; // 帧头起始码 - 第一个字节
+                        frameHeader[1] = 0xee; // 帧头起始码 - 第二个字节
+                        frameHeader[2] = (total_length >> 8) & 0xff; // 数据总长度高字节
+                        frameHeader[3] = total_length & 0xff; // 数据总长度低字节
+                        frameHeader[4] = dataSize; // 当前帧长度
+                        frameHeader[5] = 1; // 帧ID
+                        console.log("2");
+                        const frameToSend = new Uint8Array(total_length);
+                        console.log("frameToSend.length = " + frameToSend.length);
+                        frameToSend.set(frameHeader);
+
+                        const dataBytes = new TextEncoder().encode(data); // 将字符串转换为字节数组
+                        frameToSend.set(dataBytes, frameHeader.length);
+
+                        console.log("frameToSend.length = " + frameToSend.length);
+                        this.socket.send(frameToSend);
+                    }
+                },
+
+                webSocket() {
+                    const vm = this;
+                    console.log('start webSocket');
+                    // 实例化socket,这里我把用户名传给了后台,使后台能判断要把消息发给哪个用户,其实也可以后台直接获取用户IP来判断并推送
+                    const socketUrl = 'ws://127.0.0.1:50080/ws';
+                    console.log('socketUrl: ' + socketUrl);
+                    this.socket = new WebSocket(socketUrl);
+                    // 监听socket打开
+                    this.socket.onopen = function () {
+                        console.log('浏览器WebSocket已打开');
+                    };
+                    // 监听socket消息接收
+                    this.socket.onmessage = function (msg) {
+                        // 转换为json对象
+                        // console.log(msg);
+                        const data = JSON.parse(msg.data);
+                        // console.log(data);
+                        var stringValueX = getJsonValue(data, 'channel');
+                        // console.log(stringValueX);
+                        if (stringValueX == 'current_pose') {
+                            vm.realtimeData.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var floatValueX = getJsonValue(data, 'x').toFixed(3);
+                                    var floatValueY = getJsonValue(data, 'y').toFixed(3);
+                                    var floatValueYaw = getJsonValue(data, 'yaw').toFixed(3);
+                                    var intValueStatus = getJsonValue(data, 'status');
+                                    vm.$set(item, 'x', floatValueX);
+                                    vm.$set(item, 'y', floatValueY);
+                                    vm.$set(item, 'yaw', floatValueYaw);
+                                    vm.$set(item, 'status', intValueStatus);
+                                    // console.log("update item =  " + item.x);
+                                }, 500);
+                            });
+
+                        }
+                        else if (stringValueX == 'maplist') {
+                            var arraySize = data["data"].length;
+                            console.log("maplist.size =  " + arraySize);
+                            vm.mapList = [];
+                            for (var i = 0; i < arraySize; i++) {
+                                var map_name = getJsonValue(data["data"][i], 'name');
+                                var map_id = getJsonValue(data["data"][i], 'id');
+                                console.log("map_name = " + map_name, "map_id = " + map_id);
+                                var element = { "name": map_name, "id": map_id };
+                                vm.mapList.push(element);
+                                console.log(element);
+                            }
+                        }
+                        else if (stringValueX == 'map_operation') {
+                            console.log("11111");
+                            var type = getJsonValue(data, 'type');
+                            console.log("type = " + type);
+                            if (type == 5) {
+                                vm.updateMap();
+                            }
+                        }
+                        else if (stringValueX == 'imu') {
+                            vm.IMU.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var imu_pitch = getJsonValue(data["data"], 'imu_pitch').toFixed(4);
+                                    var imu_roll = getJsonValue(data["data"], 'imu_roll').toFixed(4);
+                                    var imu_yaw = getJsonValue(data["data"], 'imu_yaw').toFixed(4);
+                                    vm.$set(item, 'imu_pitch', imu_pitch);
+                                    vm.$set(item, 'imu_roll', imu_roll);
+                                    vm.$set(item, 'imu_yaw', imu_yaw);
+                                }, 500);
+                            });
+                        }
+                        else if (stringValueX == 'current_map_updata') {
+                            var arraySize = data["rooms_info"].length;
+                            vm.RoomtableData = [];
+                            for (var i = 0; i < arraySize; i++) {
+                                var map_name = getJsonValue(data["rooms_info"][i], 'name');
+                                var map_id = getJsonValue(data["rooms_info"][i], 'id');
+                                console.log("map_name = " + map_name, "map_id = " + map_id,);
+                                var element = { "name": map_name, "id": map_id, order: i + 1, clean_mode: 0, suction_level: 0, water_level: 0, repeat: false, fast_clean: false };
+                                vm.RoomtableData.push(element);
+                                console.log(element);
+                            }
+                        }
+                        else if (stringValueX == 'mcu_slow_pack') {
+
+                            vm.VL6180.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var floatLeft = getJsonValue(data["data"], 'left_vl6180_distance').toFixed(3);
+                                    var floatRight = getJsonValue(data["data"], 'right_vl6180_distance').toFixed(3);
+                                    vm.$set(item, 'left_distance', floatLeft);
+                                    vm.$set(item, 'right_distance', floatRight);
+                                    // console.log("update left_distance =  " + item.left_distance);
+                                    // console.log("update right_distance =  " + item.right_distance);
+                                }, 500);
+                            });
+
+                            vm.MotorDriver.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var left_moter_current = getJsonValue(data["data"], 'left_moter_current').toFixed(3);
+                                    var right_moter_current = getJsonValue(data["data"], 'right_moter_current').toFixed(3);
+                                    vm.$set(item, 'left_moter_current', left_moter_current);
+                                    vm.$set(item, 'motor_mode_control', motor_mode_control);
+                                    var run_state_machine = getJsonValue(data["data"], 'run_state_machine').toFixed(3);
+                                    var motor_mode_control = getJsonValue(data["data"], 'motor_mode_control').toFixed(3);
+                                    vm.$set(item, 'run_fsm_state', run_state_machine);
+                                    vm.$set(item, 'motor_mode', motor_mode_control);
+                                    // console.log("update left_moter_current =  " + item.left_moter_current);
+                                    // console.log("update right_moter_current =  " + item.right_moter_current);
+                                }, 500);
+                            });
+
+                            vm.SensorDetect.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var cliff_detect_status = getJsonValue(data["data"], 'cliff_detect_status');
+                                    var collide_detect_status = getJsonValue(data["data"], 'collide_detect_status');
+                                    var dangling_detect_status = getJsonValue(data["data"], 'dangling_detect_status');
+                                    vm.$set(item, 'cliff_detect_status', cliff_detect_status);
+                                    vm.$set(item, 'collide_detect_status', collide_detect_status);
+                                    vm.$set(item, 'dangling_detect_status', dangling_detect_status);
+                                }, 100);
+                            });
+
+                            vm.Infra.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var ira_recharge_fl = getJsonValue(data["data"], 'ira_recharge_fl');
+                                    var ira_recharge_fr = getJsonValue(data["data"], 'ira_recharge_fr');
+                                    var ira_recharge_rr = getJsonValue(data["data"], 'ira_recharge_rr');
+                                    vm.$set(item, 'ira_recharge_fl', ira_recharge_fl);
+                                    vm.$set(item, 'ira_recharge_fr', ira_recharge_fr);
+                                    vm.$set(item, 'ira_recharge_rr', ira_recharge_rr);
+                                    const left_triggle = 16;
+                                    const left_center_triggle = 4;
+                                    const right_center_triggle = 2;
+                                    const right_triggle = 8;
+
+
+                                    if (ira_recharge_fl == 0) {
+                                        vm.isLeftCenterRecieverRecievedLeftIRData = false;
+                                        vm.isLeftCenterRecieverRecievedLeftCenterIRData = false;
+                                        vm.isLeftCenterRecieverRecievedRightCenterIRData = false;
+                                        vm.isLeftCenterRecieverRecievedRightIRData = false;
+                                    }
+
+                                    if ((ira_recharge_fl & left_triggle) == left_triggle) {
+                                        vm.isLeftCenterRecieverRecievedLeftIRData = true;
+                                    }
+                                    if ((ira_recharge_fl & left_center_triggle) == left_center_triggle) {
+                                        vm.isLeftCenterRecieverRecievedLeftCenterIRData = true;
+                                    }
+                                    if ((ira_recharge_fl & right_center_triggle) == right_center_triggle) {
+                                        vm.isLeftCenterRecieverRecievedRightCenterIRData = true;
+                                    }
+                                    if ((ira_recharge_fl & right_triggle) == right_triggle) {
+                                        vm.isLeftCenterRecieverRecievedRightIRData = true;
+                                    }
+
+                                    if (ira_recharge_fr == 0) {
+                                        vm.isRightCenterRecieverRecievedLeftIRData = false;
+                                        vm.isRightCenterRecieverRecievedLeftCenterIRData = false;
+                                        vm.isRightCenterRecieverRecievedRightCenterIRData = false;
+                                        vm.isRightCenterRecieverRecievedRightIRData = false;
+                                    }
+                                    if ((ira_recharge_fr & left_triggle) == left_triggle) {
+                                        vm.isRightCenterRecieverRecievedLeftIRData = true;
+                                    }
+                                    if ((ira_recharge_fr & left_center_triggle) == left_center_triggle) {
+                                        vm.isRightCenterRecieverRecievedLeftCenterIRData = true;
+                                    }
+                                    if ((ira_recharge_fr & right_center_triggle) == right_center_triggle) {
+                                        vm.isRightCenterRecieverRecievedRightCenterIRData = true;
+                                    }
+                                    if ((ira_recharge_fr & right_triggle) == right_triggle) {
+                                        vm.isRightCenterRecieverRecievedRightIRData = true;
+                                    }
+
+
+                                    if (ira_recharge_rr == 0) {
+                                        vm.isRightRecieverRecievedLeftIRData = false;
+                                        vm.isRightRecieverRecievedLeftCenterIRData = false;
+                                        vm.isRightRecieverRecievedRightCenterIRData = false;
+                                        vm.isRightRecieverRecievedRightIRData = false;
+                                    }
+                                    if ((ira_recharge_rr & left_triggle) == left_triggle) {
+                                        vm.isRightRecieverRecievedLeftIRData = true;
+                                    }
+                                    if ((ira_recharge_rr & left_center_triggle) == left_center_triggle) {
+                                        vm.isRightRecieverRecievedLeftCenterIRData = true;
+                                    }
+                                    if ((ira_recharge_rr & right_center_triggle) == right_center_triggle) {
+                                        vm.isRightRecieverRecievedRightCenterIRData = true;
+                                    }
+                                    if ((ira_recharge_rr & right_triggle) == right_triggle) {
+                                        vm.isRightRecieverRecievedRightIRData = true;
+                                    }
+
+                                }, 50);
+                            });
+
+                            vm.WaterBox.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var dust_box_pos = getJsonValue(data["data"], 'dust_box_pos');
+                                    var mop_in_pos = getJsonValue(data["data"], 'mop_in_pos');
+                                    var lack_water = getJsonValue(data["data"], 'water_tank_status');
+                                    var water_full = getJsonValue(data["data"], 'dust_box_status');
+                                    vm.$set(item, 'dust_box_pos', dust_box_pos);
+                                    vm.$set(item, 'mop_in_pos', mop_in_pos);
+                                    vm.$set(item, 'lack_water', lack_water);
+                                    vm.$set(item, 'water_full', water_full);
+                                }, 500);
+                            });
+
+
+                            vm.Battery.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var charge_status = getJsonValue(data["data"], 'charge_status');
+                                    var in_pipe_status = getJsonValue(data["data"], 'in_pipe_status');
+                                    var battery_percent = getJsonValue(data["data"], 'battery_percent');
+                                    var battery_current = getJsonValue(data["data"], 'battery_current');
+                                    var battery_voltage = getJsonValue(data["data"], 'battery_voltage');
+                                    vm.$set(item, 'charge_status', charge_status);
+                                    vm.$set(item, 'in_pipe_status', in_pipe_status);
+                                    vm.$set(item, 'battery_percent', battery_percent);
+                                    vm.$set(item, 'battery_current', battery_current);
+                                    vm.$set(item, 'battery_voltage', battery_voltage);
+                                    // console.log("update charge_status =  " + item.charge_status);
+                                    // console.log("update in_pipe_status =  " + item.in_pipe_status);
+                                    // console.log("update battery_percent =  " + item.battery_percent);
+                                    // console.log("update battery_current =  " + item.battery_current);
+                                    // console.log("update battery_voltage =  " + item.battery_voltage);
+
+                                }, 500);
+                            });
+
+
+
+                        }
+                        else if (stringValueX == 'mcu_fast_pack') {
+                            vm.MotorDriver.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var left_encode = getJsonValue(data["data"], 'left_encode_val');
+                                    var right_encode = getJsonValue(data["data"], 'right_encode_val');
+                                    var odom_x = getJsonValue(data["data"], 'odom_x').toFixed(4);
+                                    var odom_y = getJsonValue(data["data"], 'odom_y').toFixed(4);
+                                    var odom_yaw = getJsonValue(data["data"], 'odom_yaw').toFixed(4);
+                                    vm.$set(item, 'left_encode', left_encode);
+                                    vm.$set(item, 'right_encode', right_encode);
+                                    vm.$set(item, 'odom_x', odom_x);
+                                    vm.$set(item, 'odom_y', odom_y);
+                                    vm.$set(item, 'odom_yaw', odom_yaw);
+                                    // console.log("update left_distance =  " + item.left_distance);
+                                    // console.log("update right_distance =  " + item.right_distance);
+                                }, 500);
+                            });
+
+                            vm.Odom.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var odom_x = getJsonValue(data["data"], 'odom_x').toFixed(4);
+                                    var odom_y = getJsonValue(data["data"], 'odom_y').toFixed(4);
+                                    var odom_yaw = getJsonValue(data["data"], 'odom_yaw').toFixed(4);
+                                    vm.$set(item, 'odom_x', odom_x);
+                                    vm.$set(item, 'odom_y', odom_y);
+                                    vm.$set(item, 'odom_yaw', odom_yaw);
+                                    // console.log("update left_distance =  " + item.left_distance);
+                                    // console.log("update right_distance =  " + item.right_distance);
+                                }, 500);
+                            });
+                        }
+                        else if (stringValueX == 'mcu_version') {
+                            console.log("mcu_version");
+                            vm.MCUVersion.forEach(item => {
+                                setTimeout(() => {
+                                    var hardware_version = getJsonValue(data["data"], 'hardware_version');
+                                    var software_version = getJsonValue(data["data"], 'software_version');
+                                    vm.$set(item, 'hardware_version', hardware_version);
+                                    vm.$set(item, 'software_version', software_version);
+                                }, 500);
+                            });
+
+                            vm.CliffCalibration.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var cliff1_calibrate = getJsonValue(data["data"], 'cliff_value1.valid');
+                                    var cliff2_calibrate = getJsonValue(data["data"], 'cliff_value2.valid');
+                                    var cliff3_calibrate = getJsonValue(data["data"], 'cliff_value3.valid');
+                                    var cliff4_calibrate = getJsonValue(data["data"], 'cliff_value4.valid');
+
+                                    var cliff_value1 = getJsonValue(data["data"], 'cliff_value1.ir_ad');
+                                    var cliff_value2 = getJsonValue(data["data"], 'cliff_value2.ir_ad');
+                                    var cliff_value3 = getJsonValue(data["data"], 'cliff_value3.ir_ad');
+                                    var cliff_value4 = getJsonValue(data["data"], 'cliff_value4.ir_ad');
+                                    if (cliff1_calibrate) {
+                                        vm.$set(item, 'cliff1_calibrate', '已标定');
+                                    }
+                                    else {
+                                        vm.$set(item, 'cliff1_calibrate', '未标定');
+                                    }
+                                    if (cliff2_calibrate) {
+                                        vm.$set(item, 'cliff2_calibrate', '已标定');
+                                    }
+                                    else {
+                                        vm.$set(item, 'cliff2_calibrate', '未标定');
+                                    }
+                                    if (cliff3_calibrate) {
+                                        vm.$set(item, 'cliff3_calibrate', '已标定');
+                                    }
+                                    else {
+                                        vm.$set(item, 'cliff3_calibrate', '未标定');
+                                    }
+                                    if (cliff4_calibrate) {
+                                        vm.$set(item, 'cliff4_calibrate', '已标定');
+                                    }
+                                    else {
+                                        vm.$set(item, 'cliff4_calibrate', '未标定');
+                                    }
+                                    vm.$set(item, 'cliff_value1', cliff_value1);
+                                    vm.$set(item, 'cliff_value2', cliff_value2);
+                                    vm.$set(item, 'cliff_value3', cliff_value3);
+                                    vm.$set(item, 'cliff_value4', cliff_value4);
+                                }, 500);
+                            });
+
+                            vm.TofLeft.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var offset_valid = getJsonValue(data["data"], 'tof_left.offset_valid');
+                                    var xcross_valid = getJsonValue(data["data"], 'tof_left.xcross_valid');
+                                    var offset = getJsonValue(data["data"], 'tof_left.offset');
+                                    var xcross = getJsonValue(data["data"], 'tof_left.xcross').toFixed(4);
+                                    vm.$set(item, 'offset_valid', offset_valid);
+                                    vm.$set(item, 'xcross_valid', xcross_valid);
+                                    vm.$set(item, 'offset', offset);
+                                    vm.$set(item, 'xcross', xcross);
+                                }, 500);
+                            });
+
+                            vm.TofRight.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var offset_valid = getJsonValue(data["data"], 'tof_right.offset_valid');
+                                    var xcross_valid = getJsonValue(data["data"], 'tof_right.xcross_valid');
+                                    var offset = getJsonValue(data["data"], 'tof_right.offset');
+                                    var xcross = getJsonValue(data["data"], 'tof_right.xcross').toFixed(4);
+                                    vm.$set(item, 'offset_valid', offset_valid);
+                                    vm.$set(item, 'xcross_valid', xcross_valid);
+                                    vm.$set(item, 'offset', offset);
+                                    vm.$set(item, 'xcross', xcross);
+                                }, 500);
+                            });
+                        }
+                        else if (stringValueX == 'cliff_average_value') {
+                            vm.RealtimeCliffCaculateData.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var cliff_value1 = getJsonValue(data["data"], 'cliff_value1.average_ir_ad');
+                                    var cliff_value2 = getJsonValue(data["data"], 'cliff_value2.average_ir_ad');
+                                    var cliff_value3 = getJsonValue(data["data"], 'cliff_value3.average_ir_ad');
+                                    var cliff_value4 = getJsonValue(data["data"], 'cliff_value4.average_ir_ad');
+                                    vm.$set(item, 'cliff_value1', cliff_value1);
+                                    vm.$set(item, 'cliff_value2', cliff_value2);
+                                    vm.$set(item, 'cliff_value3', cliff_value3);
+                                    vm.$set(item, 'cliff_value4', cliff_value4);
+                                }, 500);
+                            });
+                        }
+                        else if (stringValueX == 'cliff_realtime_data') {
+                            vm.RealtimeCliffData.forEach(item => {
+                                // 模拟从后端获取更新的温度数据的异步请求
+                                setTimeout(() => {
+                                    var cliff_value1 = getJsonValue(data["data"], 'cliff_value1.realtime_ir_ad');
+                                    var cliff_value2 = getJsonValue(data["data"], 'cliff_value2.realtime_ir_ad');
+                                    var cliff_value3 = getJsonValue(data["data"], 'cliff_value3.realtime_ir_ad');
+                                    var cliff_value4 = getJsonValue(data["data"], 'cliff_value4.realtime_ir_ad');
+                                    vm.$set(item, 'cliff_value1', cliff_value1);
+                                    vm.$set(item, 'cliff_value2', cliff_value2);
+                                    vm.$set(item, 'cliff_value3', cliff_value3);
+                                    vm.$set(item, 'cliff_value4', cliff_value4);
+                                }, 500);
+                            });
+                        }
+                        else {
+                            console.log("unknow channel = " + stringValueX);
+                        }
+
+                    };
+                    // 监听socket错误
+                    this.socket.onerror = function () {
+                        that.$notify({
+                            title: '错误',
+                            message: '服务器错误,无法接收实时报警信息',
+                            type: 'error',
+                            duration: 0
+                        });
+                    };
+                    // 监听socket关闭
+                    this.socket.onclose = function () {
+                        console.log('WebSocket已关闭');
+
+                    }
+                },
+            },
+
+            created() {
+                console.log("start mount console log ");
+                // 重定向 console.log 到 addLog 方法
+                // console.log = (message) => this.addLog(message);
+                this.webSocket();
+            }
+        });
+    </script>
+
+    <script>
+        function getJsonValue(obj, name) {
+            var result = null;
+            var value = null;
+            for (var key in obj) {
+                value = obj[key];
+                if (key == name) {
+                    return value;
+                } else {
+                    if (typeof value == "object") {
+                        result = getJsonValue(value, name);
+                    }
+                }
+            }
+            return result;
+        }
+        // 解析URL参数
+        function getParameterByName(name, url) {
+            if (!url) url = window.location.href;
+            name = name.replace(/[\[\]]/g, '\\$&');
+            const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
+            const results = regex.exec(url);
+            if (!results) return null;
+            if (!results[2]) return '';
+            return decodeURIComponent(results[2].replace(/\+/g, ' '));
+        }
+    </script>
+    <style>
+        .tab-content {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .left-section {
+            flex: 1;
+            padding-right: 20px;
+        }
+
+        .right-section {
+            flex: 1;
+            padding-left: 20px;
+            border-left: 2px solid #ebeef5;
+            /* 添加左侧边框作为垂直分割线 */
+        }
+
+
+
+        .btn-container {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+
+        .map-list-container {
+            margin-top: 10px;
+        }
+
+        .divider {
+            width: 100%;
+            height: 5px;
+            background-color: #ccc;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .buttons-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .image-container {
+            width: 640px;
+            height: 640px;
+            border: 1px solid #ccc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .selected-image img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .no-image {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            font-size: 18px;
+            color: #999;
+        }
+
+        .logs-content {
+            display: flex;
+        }
+
+        .left-section {
+            flex: 1;
+            padding-right: 20px;
+        }
+
+        .log-container {
+            height: 800px;
+            border: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+        }
+
+        .log-slider {
+            margin-bottom: 10px;
+        }
+
+        .log-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .log-item {
+            margin-bottom: 10px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+
+        .log-time {
+            color: #999;
+        }
+
+        .clear-logs {
+            margin-top: 10px;
+        }
+
+        .container {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .left-panel {
+            width: 60%;
+        }
+
+        .joystick {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+        }
+
+        .joystick-row {
+            display: flex;
+            justify-content: center;
+        }
+
+        .joystick-button {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            margin: 5px;
+        }
+
+        .right-panel {
+            width: 40%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .speed-control {
+            margin-bottom: 20px;
+        }
+
+        .slider-label {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .current-value {
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .custom-input {
+            width: 300px;
+            /* 设置输入框宽度 */
+        }
+    </style>
+</body>
+
+</html>

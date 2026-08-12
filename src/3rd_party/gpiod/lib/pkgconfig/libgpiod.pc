@@ -1,0 +1,11 @@
+prefix=/home/workspace/01-proj/RK3576/petrobot_demo/OLED/demo/exmaple/libgpiod-1.6.4/install
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libgpiod
+Description: Library and tools for the Linux GPIO chardev
+URL: 
+Version: 1.6.4
+Libs: -L${libdir} -lgpiod
+Cflags: -I${includedir}

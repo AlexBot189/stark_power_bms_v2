@@ -1,0 +1,7 @@
+build/
+install/
+package/
+*.o
+*.tar.bz2
+tags
+.DS_Store

@@ -1,0 +1,13 @@
+{
+    "date": "2025/08/06",
+    "influence": "to_be_set",
+    "eros_msg": {
+        "involved": false,
+        "autoupdate": true,
+        "branch": "to_be_set",
+        "commit": "to_be_set"
+    },
+    "content": [
+	"1.26.1版本"
+    ]
+}

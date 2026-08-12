@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP地址登录</title>
+    <!-- 引入ElementUI的CSS和JS文件 -->
+    <link rel="stylesheet" href="../cs/index.css">
+</head>
+
+<body>
+    <div id="app">
+        <div class="divider"></div>
+        <el-form ref="loginForm" :model="loginForm" label-width="80px">
+            <el-form-item label="IP地址" prop="ip">
+                <div class="divider"></div>
+                <el-input v-model="loginForm.ip" placeholder="请输入IP地址"></el-input>
+            </el-form-item>
+            <el-form-item>
+                <el-button @click="testPortAndLogin">测试IP并登入</el-button>
+            </el-form-item>
+        </el-form>
+    </div>
+
+    <!-- 引入Vue.js和ElementUI的JS文件 -->
+    <script src="../js/vue.js"></script>
+    <script src="../js/index.js"></script>
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                loginForm: {
+                    ip: '127.0.0.1' // 用于存储用户输入的IP地址
+                }
+            },
+            methods: {
+                testPortAndLogin() {
+                    // 在这里编写测试端口的逻辑
+                    window.location.href = 'test_utility_base.html?ip=' + this.loginForm.ip;
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>
