@@ -588,6 +588,13 @@ BatteryDispatcher::PollThreadFunc()
             last_fault_time = now;
         }
 
+        /* 历史故障次数 */
+        if (m_poll_cfg.enable_fault_count &&
+            fault_elapsed >= static_cast<int64_t>(m_poll_cfg.fault_count_period_ms) &&
+            m_poll_cfg.fault_count_period_ms > 0) {
+            SendQueryRequest(BatteryFunc::COMPREHENSIVE, BatteryCmd::FAULT_COUNT);
+        }
+
         /* 休眠到下次最近的 poll 时间 */
         auto next = std::min({
             last_core_time + std::chrono::milliseconds(m_poll_cfg.period_ms),
@@ -691,6 +698,9 @@ BatteryDispatcher::ParseResponse(const BatteryPkg& pkg)
     case 0x1003: ParseVersion(pkg);        break;
     case 0x1005: ParseId(pkg);             break;
     case 0x2005: ParseChargeCurrent(pkg);  break;
+    case 0x2006: break;
+    case 0x2007: break;
+    case 0x503C: ParseFaultCounters(pkg);   break;
     case 0x9001: ParsePowerCtrlAck(pkg);   break;
     case 0x9003: ParseChargeSwitchAck(pkg);break;
     case 0x1007: ParseQrCode(pkg);         break;
@@ -818,33 +828,57 @@ void
 BatteryDispatcher::ParseFaultInfo(const BatteryPkg& pkg)
 {
     const auto& d = pkg.data;
-    if (d.size() < 20) {
+    if (d.size() < 7) {
         ECO_WARN("[BatteryDispatcher] 0x503B data too short: %zu bytes", d.size());
         return;
     }
 
-    ECO_INFO("[BatteryDispatcher] 0x503B fault raw: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
-             d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7],
-             d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15],
-             d[16], d[17], d[18], d[19]);
+    ECO_INFO("[BatteryDispatcher] 0x503B fault: sys1=0x%02X sys2=0x%02X "
+             "dis1=0x%02X dis2=0x%02X chg1=0x%02X chg2=0x%02X status=0x%02X",
+             d[0], d[1], d[2], d[3], d[4], d[5], d[6]);
 
     {
     std::lock_guard<std::mutex> lk(m_data_mutex);
 
-    /* 最近 10 次故障, 每 2 字节小端 */
-    for (int i = 0; i < 10; i++) {
-        uint16_t offset = i * 2;
-        m_fault.records[i] = static_cast<uint16_t>(d[offset]) |
-                            (static_cast<uint16_t>(d[offset + 1]) << 8);
-    }
+    m_fault.sys_fault1    = d[0];
+    m_fault.sys_fault2    = d[1];
+    m_fault.dischg_fault1 = d[2];
+    m_fault.dischg_fault2 = d[3];
+    m_fault.chg_fault1    = d[4];
+    m_fault.chg_fault2    = d[5];
+    m_fault.pack_status   = d[6];
 
-    /* 解析最近一次故障 */
-    DecodeFaultBits(m_fault.records[0], m_fault);
-
-    ECO_INFO("[BatteryDispatcher] 0x503B latest=0x%04X overvol=%d overcur=%d ntcShort=%d",
-             m_fault.records[0],
-             m_fault.charger_overvoltage, m_fault.charge_overcurrent,
-             m_fault.ntc_short);
+    m_fault.comm_timeout    = (d[0] & 0x01) != 0;
+    m_fault.cell_ntc_fault  = (d[0] & 0x02) != 0;
+    m_fault.mos_ntc_fault   = (d[0] & 0x04) != 0;
+    m_fault.cell_ntc_short  = (d[0] & 0x08) != 0;
+    m_fault.cell_ntc_open   = (d[0] & 0x10) != 0;
+    m_fault.mos_ntc_short   = (d[0] & 0x20) != 0;
+    m_fault.mos_ntc_open    = (d[0] & 0x40) != 0;
+    m_fault.cell_fault      = (d[1] & 0x01) != 0;
+    m_fault.afe_fault       = (d[1] & 0x02) != 0;
+    m_fault.fuse_fault      = (d[1] & 0x04) != 0;
+    m_fault.overdischarge_l1     = (d[2] & 0x01) != 0;
+    m_fault.dischg_overcurrent_l1 = (d[2] & 0x02) != 0;
+    m_fault.dischg_cell_overtemp  = (d[2] & 0x04) != 0;
+    m_fault.dischg_mos_overtemp   = (d[2] & 0x08) != 0;
+    m_fault.dischg_cell_lowtemp   = (d[2] & 0x10) != 0;
+    m_fault.overdischarge_l2     = (d[3] & 0x01) != 0;
+    m_fault.dischg_overcurrent_l2 = (d[3] & 0x02) != 0;
+    m_fault.dischg_short          = (d[3] & 0x04) != 0;
+    m_fault.dischg_mos_fault      = (d[3] & 0x08) != 0;
+    m_fault.overcharge_l1      = (d[4] & 0x01) != 0;
+    m_fault.chg_overcurrent_l1 = (d[4] & 0x02) != 0;
+    m_fault.chg_overtemp       = (d[4] & 0x04) != 0;
+    m_fault.charger_fault      = (d[4] & 0x08) != 0;
+    m_fault.chg_mos_fault      = (d[4] & 0x10) != 0;
+    m_fault.chg_timeout        = (d[4] & 0x20) != 0;
+    m_fault.overcharge_l2      = (d[5] & 0x01) != 0;
+    m_fault.chg_overcurrent_l2 = (d[5] & 0x02) != 0;
+    m_fault.chg_mos_active       = (d[6] & 0x01) != 0;
+    m_fault.dischg_mos_active    = (d[6] & 0x02) != 0;
+    m_fault.chg_mos_master_ctrl  = (d[6] & 0x04) != 0;
+    m_fault.dischg_mos_master_ctrl = (d[6] & 0x08) != 0;
 
     m_fault.timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -938,23 +972,64 @@ BatteryDispatcher::ParseQrCode(const BatteryPkg& pkg)
     ECO_INFO("[BatteryDispatcher] 0x1007 QR: %s", qr.c_str());
 }
 
+void
+BatteryDispatcher::ParseFaultCounters(const BatteryPkg& pkg)
+{
+    const auto& d = pkg.data;
+    if (d.size() < 22) {
+        ECO_WARN("[BatteryDispatcher] 0x503C data too short: %zu bytes", d.size());
+        return;
+    }
+
+    {
+    std::lock_guard<std::mutex> lk(m_data_mutex);
+
+    m_fault_counters.overcharge            = (static_cast<uint16_t>(d[0]) << 8)  | d[1];
+    m_fault_counters.chg_overtemp          = (static_cast<uint16_t>(d[2]) << 8)  | d[3];
+    m_fault_counters.chg_overcurrent       = (static_cast<uint16_t>(d[4]) << 8)  | d[5];
+    m_fault_counters.charger_fault         = (static_cast<uint16_t>(d[6]) << 8)  | d[7];
+    m_fault_counters.chg_timeout           = (static_cast<uint16_t>(d[8]) << 8)  | d[9];
+    m_fault_counters.overdischarge         = (static_cast<uint16_t>(d[10]) << 8) | d[11];
+    m_fault_counters.dischg_overtemp       = (static_cast<uint16_t>(d[12]) << 8) | d[13];
+    m_fault_counters.dischg_overcurrent_l1 = (static_cast<uint16_t>(d[14]) << 8) | d[15];
+    m_fault_counters.dischg_overcurrent_l2 = (static_cast<uint16_t>(d[16]) << 8) | d[17];
+    m_fault_counters.dischg_short          = (static_cast<uint16_t>(d[18]) << 8) | d[19];
+    m_fault_counters.comm_timeout          = (static_cast<uint16_t>(d[20]) << 8) | d[21];
+
+    m_fault_counters.timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+}
+
+void
+BatteryDispatcher::SetChargerStatus(bool plugged)
+{
+    std::vector<uint8_t> data = {
+        plugged ? BatteryChargerStatus::PLUGGED : BatteryChargerStatus::NOT_PLUGGED,
+        0x00
+    };
+    SendControl(BatteryFunc::VOLTAGE_CTRL, BatteryCmd::CHARGER_STATUS, data);
+}
+
+void
+BatteryDispatcher::ControlMOS(uint8_t chg_mos, uint8_t dischg_mos)
+{
+    std::vector<uint8_t> data = { chg_mos, dischg_mos };
+    SendControl(BatteryFunc::VOLTAGE_CTRL, BatteryCmd::MOS_CTRL, data);
+}
+
+FaultCounters
+BatteryDispatcher::GetFaultCounters() const
+{
+    std::lock_guard<std::mutex> lk(m_data_mutex);
+    return m_fault_counters;
+}
+
 /* ================================================================
  * 故障位解析
  * ================================================================ */
 
 void
-BatteryDispatcher::DecodeFaultBits(uint16_t fault_code, BatteryFault& fault)
-{
-    fault.charger_overvoltage   = (fault_code & BatteryFaultBit::CHARGER_OVERVOLTAGE)   == 0;
-    fault.charge_overcurrent    = (fault_code & BatteryFaultBit::CHARGE_OVERCURRENT)    == 0;
-    fault.ntc_short             = (fault_code & BatteryFaultBit::NTC_SHORT)             == 0;
-    fault.ntc_open              = (fault_code & BatteryFaultBit::NTC_OPEN)              == 0;
-    fault.cell_voltage_diff     = (fault_code & BatteryFaultBit::CELL_VOLTAGE_DIFF)     == 0;
-    fault.charge_timeout        = (fault_code & BatteryFaultBit::CHARGE_TIMEOUT)        == 0;
-    fault.discharge_overcurrent = (fault_code & BatteryFaultBit::DISCHARGE_OVERCURRENT) == 0;
-    fault.discharge_short       = (fault_code & BatteryFaultBit::DISCHARGE_SHORT)       == 0;
-    fault.secondary_overcharge  = (fault_code & BatteryFaultBit::SECONDARY_OVERCHARGE)  == 0;
-}
 
 /* ================================================================
  * Observer 通知

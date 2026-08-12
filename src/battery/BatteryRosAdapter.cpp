@@ -110,43 +110,56 @@ BatteryRosAdapter::OnFault(const BatteryFault& fault)
     msg.header.stamp = ros::Time::now();
     msg.header.frame_id = "battery_fault";
 
-    msg.fault_0               = fault.records[0];
-    msg.fault_1               = fault.records[1];
-    msg.fault_2               = fault.records[2];
-    msg.fault_3               = fault.records[3];
-    msg.fault_4               = fault.records[4];
-    msg.fault_5               = fault.records[5];
-    msg.fault_6               = fault.records[6];
-    msg.fault_7               = fault.records[7];
-    msg.fault_8               = fault.records[8];
-    msg.fault_9               = fault.records[9];
-    msg.charger_overvoltage   = fault.charger_overvoltage;
-    msg.charge_overcurrent    = fault.charge_overcurrent;
-    msg.ntc_short             = fault.ntc_short;
-    msg.ntc_open              = fault.ntc_open;
-    msg.cell_voltage_diff     = fault.cell_voltage_diff;
-    msg.charge_timeout        = fault.charge_timeout;
-    msg.discharge_overcurrent = fault.discharge_overcurrent;
-    msg.discharge_short       = fault.discharge_short;
-    msg.secondary_overcharge  = fault.secondary_overcharge;
+    msg.sys_fault1    = fault.sys_fault1;
+    msg.sys_fault2    = fault.sys_fault2;
+    msg.dischg_fault1 = fault.dischg_fault1;
+    msg.dischg_fault2 = fault.dischg_fault2;
+    msg.chg_fault1    = fault.chg_fault1;
+    msg.chg_fault2    = fault.chg_fault2;
+    msg.pack_status   = fault.pack_status;
+    msg.comm_timeout      = fault.comm_timeout;
+    msg.cell_ntc_fault    = fault.cell_ntc_fault;
+    msg.mos_ntc_fault     = fault.mos_ntc_fault;
+    msg.cell_ntc_short    = fault.cell_ntc_short;
+    msg.cell_ntc_open     = fault.cell_ntc_open;
+    msg.mos_ntc_short     = fault.mos_ntc_short;
+    msg.mos_ntc_open      = fault.mos_ntc_open;
+    msg.cell_fault = fault.cell_fault;
+    msg.afe_fault  = fault.afe_fault;
+    msg.fuse_fault = fault.fuse_fault;
+    msg.overdischarge_l1      = fault.overdischarge_l1;
+    msg.dischg_overcurrent_l1 = fault.dischg_overcurrent_l1;
+    msg.dischg_cell_overtemp  = fault.dischg_cell_overtemp;
+    msg.dischg_mos_overtemp   = fault.dischg_mos_overtemp;
+    msg.dischg_cell_lowtemp   = fault.dischg_cell_lowtemp;
+    msg.overdischarge_l2      = fault.overdischarge_l2;
+    msg.dischg_overcurrent_l2 = fault.dischg_overcurrent_l2;
+    msg.dischg_short          = fault.dischg_short;
+    msg.dischg_mos_fault      = fault.dischg_mos_fault;
+    msg.overcharge_l1      = fault.overcharge_l1;
+    msg.chg_overcurrent_l1 = fault.chg_overcurrent_l1;
+    msg.chg_overtemp       = fault.chg_overtemp;
+    msg.charger_fault      = fault.charger_fault;
+    msg.chg_mos_fault      = fault.chg_mos_fault;
+    msg.chg_timeout        = fault.chg_timeout;
+    msg.overcharge_l2      = fault.overcharge_l2;
+    msg.chg_overcurrent_l2 = fault.chg_overcurrent_l2;
+    msg.chg_mos_active          = fault.chg_mos_active;
+    msg.dischg_mos_active       = fault.dischg_mos_active;
+    msg.chg_mos_master_ctrl     = fault.chg_mos_master_ctrl;
+    msg.dischg_mos_master_ctrl  = fault.dischg_mos_master_ctrl;
 
     m_faultPub.publish(msg);
 
     if (m_wsBroadcast) {
         nJson data;
-        data["records"] = nJson::array();
-        for (int i = 0; i < 10; i++) {
-            data["records"].push_back(fault.records[i]);
-        }
-        data["charger_overvoltage"]   = fault.charger_overvoltage;
-        data["charge_overcurrent"]    = fault.charge_overcurrent;
-        data["ntc_short"]             = fault.ntc_short;
-        data["ntc_open"]              = fault.ntc_open;
-        data["cell_voltage_diff"]     = fault.cell_voltage_diff;
-        data["charge_timeout"]        = fault.charge_timeout;
-        data["discharge_overcurrent"] = fault.discharge_overcurrent;
-        data["discharge_short"]       = fault.discharge_short;
-        data["secondary_overcharge"]  = fault.secondary_overcharge;
+        data["sys_fault1"]    = fault.sys_fault1;
+        data["sys_fault2"]    = fault.sys_fault2;
+        data["dischg_fault1"] = fault.dischg_fault1;
+        data["dischg_fault2"] = fault.dischg_fault2;
+        data["chg_fault1"]    = fault.chg_fault1;
+        data["chg_fault2"]    = fault.chg_fault2;
+        data["pack_status"]   = fault.pack_status;
 
         nJson root;
         root["channel"] = "battery_fault";

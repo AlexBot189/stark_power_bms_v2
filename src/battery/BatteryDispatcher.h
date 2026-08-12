@@ -59,6 +59,7 @@ struct BatteryPollConfig {
     bool     enable_current_temp{ true };           /* 轮询电流温度 0x5002 */
     bool     enable_soc_capacity{ true };           /* 轮询 SOC 容量 0x5004 */
     bool     enable_fault{ true };                  /* 轮询故障信息 0x503B */
+    bool     enable_fault_count{ false };           /* 轮询历史故障次数 0x503C */
     bool     enable_charge_current{ false };        /* 轮询充电电流 0x2005 */
 };
 
@@ -114,6 +115,9 @@ public:
     void SendControl(uint8_t func_code, uint8_t cmd_code,
                      const std::vector<uint8_t>& data);
 
+    void SetChargerStatus(bool plugged);
+    void ControlMOS(uint8_t chg_mos, uint8_t dischg_mos);
+
     /*
      * 发送请求并等待响应 (同步, 带超时)
      *
@@ -140,6 +144,8 @@ public:
      * 获取当前故障信息
      */
     BatteryFault GetFault() const;
+
+    FaultCounters GetFaultCounters() const;
 
     /*
      * 获取当前电池信息
@@ -186,12 +192,9 @@ private:
     void ParsePowerCtrlAck(const BatteryPkg& pkg);       /* 0x9001 */
     void ParseChargeSwitchAck(const BatteryPkg& pkg);    /* 0x9003 */
     void ParseQrCode(const BatteryPkg& pkg);             /* 0x1007 */
+    void ParseFaultCounters(const BatteryPkg& pkg);    /* 0x503C */
 
-    /* 构建并发送请求帧 */
     void SendQueryRequest(uint8_t func_code, uint8_t cmd_code);
-
-    /* 故障位解析 */
-    void DecodeFaultBits(uint16_t fault_code, BatteryFault& fault);
     void TryMatchResponse(const BatteryPkg& pkg);
 
     /* 通知所有 Observer */
@@ -237,6 +240,7 @@ private:
     mutable std::mutex m_data_mutex;
     BatteryStatus m_status;
     BatteryFault  m_fault;
+    FaultCounters m_fault_counters;
     BatteryInfo   m_info;
 
     /* Observer 回调列表 */
