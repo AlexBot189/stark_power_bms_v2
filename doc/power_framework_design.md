@@ -1,6 +1,6 @@
 # 外骨骼助力机器人 — 电源管理系统设计
 
-> 版本: V1.0 | 日期: 2026-08-12 | 维护: zhiqiang.yang
+> 版本: V1.1 | 日期: 2026-08-13 | 维护: zhiqiang.yang
 
 ---
 
@@ -38,7 +38,7 @@ stark_power_manager_node (同一进程)
 ├── PowerRegistry          — 电源设备注册表 (新增)
 ├── PowerManager           — 充电状态机 (新增)
 ├── IP2366Source           — IP2366 I2C 驱动 (新增)
-└── BmsUartSource          — BMS 数据包装 (待实现，对接 BatteryDispatcher)
+└── BmsUartSource          — BMS 数据包装 (已实现，对接 BatteryDispatcher)
 ```
 
 ### 2.2 分层
@@ -263,7 +263,7 @@ FAULT:      sys_fault1!=0 || sys_fault2!=0
             || chg_fault1!=0 || dischg_fault1!=0
 
 CAPACITY:   soc_percent
-TEMPERATURE: temperature_k_raw (开氏×10, 和标准一致)
+TEMPERATURE: temperature_c × 10 (摄氏度×10, 例 325=32.5°C)
 VOLTAGE_NOW: total_voltage_mv
 CURRENT_NOW: current_ma (正=充电, 负=放电)
 ```
@@ -291,7 +291,7 @@ PowerManager::tick() [1Hz, poll_thread]
 
 ## 七、BMS 数据接入
 
-BatteryDispatcher 已有完整的 BMS UART 通信能力（V1.02 协议，12 条指令全支持）。需要新增 `BmsUartSource` 将 BatteryDispatcher 包装为 IPowerSource 接口，使 PowerManager 能通过标准属性访问 BMS 数据：
+BatteryDispatcher 已有完整的 BMS UART 通信能力（V1.02 协议，12 条指令全支持）。`BmsUartSource` 将 BatteryDispatcher 包装为 IPowerSource 接口，使 PowerManager 能通过标准属性访问 BMS 数据（已实现，见 `src/power/plugins/bms_uart/`）：
 
 ```
 BatteryDispatcher (现有，不改)
@@ -309,7 +309,7 @@ BatteryDispatcher (现有，不改)
 | BMS 数据 | PowerProp |
 |----------|-----------|
 | BatteryStatus::soc_percent | CAPACITY |
-| BatteryStatus::temperature_k_raw / 10 | TEMPERATURE |
+| BatteryStatus::temperature_c × 10 | TEMPERATURE |
 | BatteryStatus::total_voltage_mv | VOLTAGE_NOW |
 | BatteryStatus::current_ma | CURRENT_NOW |
 | BatteryStatus::bms_status | STATUS |
@@ -344,10 +344,13 @@ src/power/
 ├── PowerRegistry.h/cpp          171行  注册表
 ├── ChargeStateMachine.h/cpp     114行  状态机转换表
 ├── PowerManager.h/cpp           697行  充电管理器
-└── plugins/ip2366/
-    ├── IP2366Reg.h              145行  寄存器定义(逐bit对照手册)
-    ├── IP2366Source.h           147行  驱动声明
-    └── IP2366Source.cpp         687行  驱动实现
+├── plugins/ip2366/
+│   ├── IP2366Reg.h              145行  寄存器定义(逐bit对照手册)
+│   ├── IP2366Source.h           147行  驱动声明
+│   └── IP2366Source.cpp         687行  驱动实现
+└── plugins/bms_uart/
+    ├── BmsUartSource.h           60行  适配器声明
+    └── BmsUartSource.cpp        230行  BatteryDispatcher → PowerProp 映射
 ```
 
 ---
@@ -356,8 +359,25 @@ src/power/
 
 本架构设计时预留了跨项目复用能力：
 
-- **换充电IC**：实现 IPowerSource 接口（参考 IP2366Source），YAML 配置改 driver 字段。PowerManager / PowerRegistry 不动。
+- **换充电IC**：实现 IPowerSource 接口（参考 IP2366Source），静态注册 1 行。PowerManager / PowerRegistry 不动。
 - **换BMS协议**：同上，实现 IPowerSource 接口并注册。
 - **换通信接口**：IPowerSource 接口屏蔽了底层（I2C/UART/CAN/SPI），上层无感知。
 
-换硬件的改动量：约 200 行新驱动代码 + 1 行配置修改。框架核心层零改动。
+换硬件的改动量：约 200 行新驱动代码 + 1 行注册修改。框架核心层零改动。
+
+---
+
+## 十一、变更记录
+
+### V1.1 (2026-08-13)
+- BmsUartSource 落地 (`src/power/plugins/bms_uart/`)
+- 静态注册取代 dlopen 插件 (去掉 driver 字段)
+- 修复: 交叉验证接线 (isActuallyCharging + m_bms_available 降级)
+- 修复: INT 下降沿误判故障 (只置 vbus_ok, 故障交 readChargeState 读 0x38)
+- 修复: I2C 并发保护 (m_i2c_mutex)
+- 修复: initialize test_val 判断 (改 bool i2c_ready)
+- 修复: CC 超时误报 (基于 m_charge_type)
+- 修复: readADC16 失败返回 0 (改 bool + out, 失败保留旧值)
+- 新增: INT 超时兜底轮询 (1Hz, 防 INT 丢失)
+- 新增: 0x38 异常位写回清除 (对齐厂商 SDK)
+- 修正: TEMPERATURE 映射为 temperature_c × 10 (摄氏度×10)

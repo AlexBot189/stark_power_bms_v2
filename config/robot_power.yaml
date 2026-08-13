@@ -6,7 +6,6 @@ power_sources:
 
   - name: "charger_ip2366"
     type: "charger"
-    driver: "plugins/libpower_ip2366.so"
     config:
       # I2C 通信
       i2c_dev: "/dev/i2c-2"
@@ -29,7 +28,7 @@ power_sources:
       trickle_current_ma: 200   # 涓流电流 mA
       stop_current_ma: 100      # 停充电流 mA
 
-  # BMS 电池包 (通过 BatteryDispatcher 访问, 同进程不需要 driver)
+  # BMS 电池包 (静态注册, 包装 BatteryDispatcher)
   - name: "battery_bms"
     type: "battery"
 

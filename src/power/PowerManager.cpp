@@ -120,8 +120,8 @@ void PowerManager::tickDetect()
         m_fault_debouncing = false;
     }
 
-    /* PD 协商完成: charger 报 charging 状态 */
-    if (m_charger_charging) {
+    /* PD 协商完成: 交叉验证 charger + battery 都报充电 */
+    if (isActuallyCharging()) {
         ChargeState prev = m_sm.current;
         if (m_sm.transition(ChargeEvent::PD_READY)) {
             m_charge_started_at = std::chrono::steady_clock::now();
@@ -275,12 +275,9 @@ bool PowerManager::readChargerStatus()
         m_charger_full = (s == "full");
     }
 
-    /* 充电阶段 */
+    /* 充电阶段 (trickle/cc/cv/none), 供 CC 超时等判断使用 */
     if (reg.getProp("charger_ip2366", PowerProp::CHARGE_TYPE, v)) {
-        const auto& s = v.asStr();
-        if (s == "none" || s == "trickle" || s == "cc" || s == "cv") {
-            /* 补充充电阶段信息 */
-        }
+        m_charge_type = v.asStr();
     }
 
     /* IP2366 是否在线 */
@@ -322,6 +319,10 @@ bool PowerManager::readBatteryStatus()
         const auto& s = v.asStr();
         m_bms_charging = (s == "charging");
         m_bms_full = (s == "full");
+        m_bms_available = true;
+    } else {
+        /* BMS 状态读不到 => 数据源不可用, 交叉验证降级为单源 */
+        m_bms_available = false;
     }
 
     /* BMS 故障 */
@@ -359,7 +360,7 @@ bool PowerManager::readBatteryStatus()
  */
 bool PowerManager::isActuallyCharging()
 {
-    if (m_cfg.cross_verify_charge) {
+    if (m_cfg.cross_verify_charge && m_bms_available) {
         return m_charger_charging && m_bms_charging;
     }
     return m_charger_charging;
@@ -413,8 +414,9 @@ bool PowerManager::hasAnyFault()
             return true;
         }
 
-        /* CC 阶段超时 (仅当还没充满时) */
-        if (!m_charger_full && elapsed_min >= m_cfg.cc_timeout_min) {
+        /* CC 阶段超时: 仅当仍处于 CC 阶段时才判定, 避免 CV 阶段误报 */
+        if (m_charge_type == "cc" && !m_charger_full
+            && elapsed_min >= m_cfg.cc_timeout_min) {
             m_last_fault = "Charge CC phase timeout";
             return true;
         }

@@ -85,8 +85,9 @@ private:
     bool readReg(uint8_t reg, uint8_t& val);
     bool writeReg(uint8_t reg, uint8_t val);
 
-    /* 读 16 位 ADC (严格先低后高, 读低触发锁存更新) */
-    uint16_t readADC16(uint8_t reg_low, uint8_t reg_high);
+    /* 读 16 位 ADC (严格先低后高, 读低触发锁存更新)
+     * 返回 false 表示读取失败; 调用方应保留旧值而非当作 0 */
+    bool readADC16(uint8_t reg_low, uint8_t reg_high, uint16_t& out);
 
     /* 读-修改-写: 读 reg -> 只改 mask 位 -> 写回 */
     bool rmwReg(uint8_t reg, uint8_t mask, uint8_t bits);
@@ -119,6 +120,9 @@ private:
     gpiod_chip* m_charge_en_chip = nullptr;
     gpiod_line* m_charge_en_line = nullptr;
     bool m_gpio_ready = false;
+
+    /* ---- I2C 访问串行化 (INT 线程 readChargeState 与 setProp 并发保护) ---- */
+    std::mutex m_i2c_mutex;
 
     /* ---- 状态缓存 (mutex 保护) ---- */
     mutable std::mutex m_mutex;

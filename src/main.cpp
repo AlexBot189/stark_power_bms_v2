@@ -23,6 +23,11 @@
 #include "gw_adapter/WebServer.hpp"
 #include "battery/BatteryDispatcher.h"
 #include "battery/BatteryRosAdapter.hpp"
+#include "power/PowerRegistry.h"
+#include "power/PowerManager.h"
+#include "power/ChargeStateMachine.h"
+#include "power/plugins/ip2366/IP2366Source.h"
+#include "power/plugins/bms_uart/BmsUartSource.h"
 
 using namespace stark_power_manager;
 
@@ -59,6 +64,20 @@ PrintBacktrace(int signo)
     if (SIGSEGV == signo || SIGQUIT == signo)
     {
         exit(0);
+    }
+}
+
+/* 充电状态名 (日志用) */
+static const char*
+ChargeStateName(ChargeState s)
+{
+    switch (s) {
+    case ChargeState::IDLE:   return "IDLE";
+    case ChargeState::DETECT: return "DETECT";
+    case ChargeState::CHARGE: return "CHARGE";
+    case ChargeState::FULL:   return "FULL";
+    case ChargeState::FAULT:  return "FAULT";
+    default:                  return "UNKNOWN";
     }
 }
 
@@ -128,6 +147,35 @@ main(int argc, char** argv)
         pWebServer->SetBatteryInfoHandler(
             [pBattery]() { pBattery->QueryInfo(); });
     }
+
+    /* ================= 电源管理框架 (静态注册) ================= */
+    /* 充电 IC 数据源 (I2C + INT GPIO), 初始化失败则降级为仅 BMS */
+    std::unique_ptr<IP2366Source> ip2366(new IP2366Source(IP2366Source::Config{}));
+    if (ip2366->initialize()) {
+        PowerRegistry::instance().registerSource(std::move(ip2366));
+        ECO_INFO("[main] IP2366 charger source registered");
+    } else {
+        ECO_WARN("[main] IP2366 init failed, charger source unavailable (degraded)");
+    }
+
+    /* 电池 BMS 数据源 (包装 BatteryDispatcher) */
+    std::unique_ptr<BmsUartSource> bmsSrc(new BmsUartSource(pBattery));
+    PowerRegistry::instance().registerSource(std::move(bmsSrc));
+    ECO_INFO("[main] battery_bms source registered");
+
+    /* 充电管理器 (1Hz tick 驱动状态机) */
+    auto powerMgr = std::make_shared<PowerManager>();
+    powerMgr->initialize();
+    powerMgr->setStateChangeCb([](ChargeState from, ChargeState to) {
+        ECO_INFO("[PowerManager] state: %s -> %s",
+                 ChargeStateName(from), ChargeStateName(to));
+    });
+    powerMgr->setFaultCb([](const char* reason) {
+        ECO_ERROR("[PowerManager] fault: %s", reason);
+    });
+    ros::Timer powerTimer = nh->createTimer(ros::Duration(1.0),
+        [powerMgr](const ros::TimerEvent&) { powerMgr->tick(); });
+    ECO_INFO("[main] power manager started (1Hz tick)");
 
     /* 主循环 */
     ros::Rate rate(150);

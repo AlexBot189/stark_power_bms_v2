@@ -172,6 +172,7 @@ bool IP2366Source::getProp(PowerProp prop, PowerValue& out)
 
 bool IP2366Source::setProp(PowerProp prop, const PowerValue& val)
 {
+    std::lock_guard<std::mutex> i2c_lock(m_i2c_mutex);
     switch (prop) {
     case PowerProp::CHARGE_ENABLE: {
         bool en = val.asBool();
@@ -254,9 +255,11 @@ bool IP2366Source::initialize()
     ECO_INFO("[IP2366] I2C opened: %s addr=0x%02X",
              m_cfg.i2c_dev.c_str(), m_cfg.addr);
 
-    /* 2. 验证 I2C 通信 (读一次充电状态寄存器) */
+    /* 2. 验证 I2C 通信 (读一次充电状态寄存器)
+     * 注意: 不能拿寄存器值判断就绪, 待机时 STATE_CTL0 可能为 0x00 */
     uint8_t test_val = 0;
-    if (!readReg(REG_STATE_CTL0, test_val)) {
+    bool i2c_ready = readReg(REG_STATE_CTL0, test_val);
+    if (!i2c_ready) {
         ECO_WARN("[IP2366] first I2C read failed, chip may be in sleep");
         /* 不 fatal, 等 INT 唤醒后重试 */
     } else {
@@ -272,7 +275,7 @@ bool IP2366Source::initialize()
     }
 
     /* 4. 初始化充电参数 (仅在 I2C 已就绪时) */
-    if (test_val != 0) {
+    if (i2c_ready) {
         if (!initChargeParams()) {
             ECO_WARN("[IP2366] initChargeParams failed, will retry on wake");
         }
@@ -425,7 +428,7 @@ bool IP2366Source::rmwReg(uint8_t reg, uint8_t mask, uint8_t bits)
  * ADC 读取 (关键约束: 必须先读低字节再读高字节)
  * ================================================================ */
 
-uint16_t IP2366Source::readADC16(uint8_t reg_low, uint8_t reg_high)
+bool IP2366Source::readADC16(uint8_t reg_low, uint8_t reg_high, uint16_t& out)
 {
     uint8_t lo = 0, hi = 0;
 
@@ -434,13 +437,14 @@ uint16_t IP2366Source::readADC16(uint8_t reg_low, uint8_t reg_high)
      * 读低字节触发硬件锁存器更新, 颠倒顺序会读到错误数据。
      */
     if (!readReg(reg_low, lo)) {
-        return 0;
+        return false;
     }
     if (!readReg(reg_high, hi)) {
-        return 0;
+        return false;
     }
 
-    return (static_cast<uint16_t>(hi) << 8) | lo;
+    out = (static_cast<uint16_t>(hi) << 8) | lo;
+    return true;
 }
 
 /* ================================================================
@@ -449,6 +453,7 @@ uint16_t IP2366Source::readADC16(uint8_t reg_low, uint8_t reg_high)
 
 bool IP2366Source::initChargeParams()
 {
+    std::lock_guard<std::mutex> i2c_lock(m_i2c_mutex);
     ECO_INFO("[IP2366] initializing charge params...");
 
     /* PDO 档位选择 */
@@ -527,70 +532,80 @@ bool IP2366Source::initChargeParams()
 void IP2366Source::readChargeState()
 {
     uint8_t s0 = 0, s2 = 0, s3 = 0, ts = 0;
-
-    if (!readReg(REG_STATE_CTL0, s0)) {
-        ECO_WARN("[IP2366] read STATE_CTL0 failed");
-        return;
-    }
-    if (!readReg(REG_STATE_CTL2, s2)) {
-        ECO_WARN("[IP2366] read STATE_CTL2 failed");
-        return;
-    }
-    if (!readReg(REG_STATE_CTL3, s3)) {
-        ECO_WARN("[IP2366] read STATE_CTL3 failed");
-        return;
-    }
-    /* 0x34: TypeC 连接状态 (Sink/Src/PD 标志位) */
-    if (!readReg(REG_TYPEC_STATE, ts)) {
-        ECO_WARN("[IP2366] read TYPEC_STATE failed");
-        ts = 0;
-    }
-
-    /* ADC (先低后高) */
-    uint16_t batt_mv  = readADC16(REG_BATVADC_L, REG_BATVADC_H);
-    uint16_t vsys_mv  = readADC16(REG_VSYSADC_L, REG_VSYSADC_H);
-    uint16_t batt_ma  = readADC16(REG_BATIADC_L, REG_BATIADC_H);
-    uint16_t sys_ma   = readADC16(REG_SYSIADC_L, REG_SYSIADC_H);
-
-    /* 检测变化 */
+    uint16_t batt_mv = 0, vsys_mv = 0, batt_ma = 0, sys_ma = 0;
+    bool adc_ok = false;
     bool state_changed = false;
 
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> i2c_lock(m_i2c_mutex);
 
-        uint8_t new_state  = s0 & MASK_CHG_STATE;
-        bool    new_active = (s0 & BIT_CHG_ACTIVE) != 0;
-        bool    new_end    = (s0 & BIT_CHG_END) != 0;
-        bool    new_vbus   = (s2 & BIT_VBUS_OK) != 0;
-        bool    new_sink   = (ts & BIT_SINK_OK) != 0;
-        bool    new_sinkpd = (ts & BIT_SINK_PD_OK) != 0;
-
-        bool new_fault = (s3 != 0);
-        if (new_fault && s3 == m_fault_code) {
-            new_fault = m_fault; /* 保持已有故障状态 */
+        if (!readReg(REG_STATE_CTL0, s0)) {
+            ECO_WARN("[IP2366] read STATE_CTL0 failed");
+            return;
+        }
+        if (!readReg(REG_STATE_CTL2, s2)) {
+            ECO_WARN("[IP2366] read STATE_CTL2 failed");
+            return;
+        }
+        if (!readReg(REG_STATE_CTL3, s3)) {
+            ECO_WARN("[IP2366] read STATE_CTL3 failed");
+            return;
+        }
+        /* 0x38 异常标志是写 1 清 0, 读到后写回清除, 避免 sticky 位残留 */
+        if (s3 != 0) {
+            writeReg(REG_STATE_CTL3, s3);
+        }
+        /* 0x34: TypeC 连接状态 (Sink/Src/PD 标志位) */
+        if (!readReg(REG_TYPEC_STATE, ts)) {
+            ECO_WARN("[IP2366] read TYPEC_STATE failed");
+            ts = 0;
         }
 
-        state_changed = (new_state  != m_chg_state)
-                     || (new_active != m_chg_active)
-                     || (new_end    != m_chg_end)
-                     || (new_vbus   != m_vbus_ok)
-                     || (new_sink   != m_sink_ok)
-                     || (new_sinkpd != m_sink_pd_ok)
-                     || (new_fault  != m_fault);
+        /* ADC (先低后高); 任一失败则保留旧值, 不当作 0 */
+        adc_ok = readADC16(REG_BATVADC_L, REG_BATVADC_H, batt_mv)
+              && readADC16(REG_VSYSADC_L, REG_VSYSADC_H, vsys_mv)
+              && readADC16(REG_BATIADC_L, REG_BATIADC_H, batt_ma)
+              && readADC16(REG_SYSIADC_L, REG_SYSIADC_H, sys_ma);
 
-        m_chg_state  = new_state;
-        m_chg_active = new_active;
-        m_chg_end    = new_end;
-        m_vbus_ok    = new_vbus;
-        m_sink_ok    = new_sink;
-        m_sink_pd_ok = new_sinkpd;
-        m_fault      = new_fault;
-        m_fault_code = s3;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
 
-        m_batt_voltage_mv = batt_mv;
-        m_vsys_voltage_mv = vsys_mv;
-        m_batt_current_ma = batt_ma;
-        m_sys_current_ma  = sys_ma;
+            uint8_t new_state  = s0 & MASK_CHG_STATE;
+            bool    new_active = (s0 & BIT_CHG_ACTIVE) != 0;
+            bool    new_end    = (s0 & BIT_CHG_END) != 0;
+            bool    new_vbus   = (s2 & BIT_VBUS_OK) != 0;
+            bool    new_sink   = (ts & BIT_SINK_OK) != 0;
+            bool    new_sinkpd = (ts & BIT_SINK_PD_OK) != 0;
+
+            bool new_fault = (s3 != 0);
+            if (new_fault && s3 == m_fault_code) {
+                new_fault = m_fault; /* 保持已有故障状态 */
+            }
+
+            state_changed = (new_state  != m_chg_state)
+                         || (new_active != m_chg_active)
+                         || (new_end    != m_chg_end)
+                         || (new_vbus   != m_vbus_ok)
+                         || (new_sink   != m_sink_ok)
+                         || (new_sinkpd != m_sink_pd_ok)
+                         || (new_fault  != m_fault);
+
+            m_chg_state  = new_state;
+            m_chg_active = new_active;
+            m_chg_end    = new_end;
+            m_vbus_ok    = new_vbus;
+            m_sink_ok    = new_sink;
+            m_sink_pd_ok = new_sinkpd;
+            m_fault      = new_fault;
+            m_fault_code = s3;
+
+            if (adc_ok) {
+                m_batt_voltage_mv = batt_mv;
+                m_vsys_voltage_mv = vsys_mv;
+                m_batt_current_ma = batt_ma;
+                m_sys_current_ma  = sys_ma;
+            }
+        }
     }
 
     if (state_changed) {
@@ -620,6 +635,8 @@ void IP2366Source::intThreadFunc()
     timeout.tv_sec  = 0;
     timeout.tv_nsec = m_cfg.int_poll_interval_ms * 1000000L;
 
+    int poll_count = 0;
+
     while (m_int_running) {
         int ret = gpiod_line_event_wait(m_int_line, &timeout);
         if (ret < 0) {
@@ -627,7 +644,12 @@ void IP2366Source::intThreadFunc()
             break;
         }
         if (ret == 0) {
-            continue; /* 超时, 继续等待 */
+            /* 超时兜底: 定期轮询状态, 防 INT 丢失或下降沿后无上升沿 */
+            if (++poll_count >= 10) {
+                poll_count = 0;
+                readChargeState();
+            }
+            continue;
         }
 
         struct gpiod_line_event event;
@@ -673,13 +695,17 @@ void IP2366Source::intThreadFunc()
              */
             ECO_INFO("[IP2366] INT falling (sleep/fault)");
 
+            /*
+             * 下降沿 = 休眠(拔电) 或 故障(2ms 脉冲), 二者无法在边沿区分,
+             * 且硬件要求 16ms 内停止 I2C, 不能在此读寄存器判断。
+             * 只标记适配器可能断开; 故障交由 readChargeState() 读 0x38 判定
+             * (故障脉冲随后会产生上升沿触发 readChargeState)。
+             */
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
-                m_fault = true;
                 m_vbus_ok = false;
             }
 
-            notifyChange(PowerProp::STATUS, PowerValue("fault"));
             notifyChange(PowerProp::ONLINE, PowerValue(false));
         }
     }

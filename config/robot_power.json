@@ -3,7 +3,6 @@
         {
             "name": "charger_ip2366",
             "type": "charger",
-            "driver": "plugins/libpower_ip2366.so",
             "config": {
                 "i2c_dev": "/dev/i2c-2",
                 "addr": 234,

@@ -126,11 +126,13 @@ private:
     bool m_bms_charging     = false;
     bool m_bms_full         = false;
     bool m_bms_fault        = false;
+    bool m_bms_available    = false; /* BMS 数据源可用性 (缺失时交叉验证降级为单源) */
     int  m_soc_percent      = 0;
     int  m_batt_temp_c      = 0;
     int  m_charge_current_ma = 0;
     int  m_batt_voltage_mv  = 0;
     int  m_full_voltage_mv  = 0;
+    std::string m_charge_type{ "none" }; /* 当前充电阶段 trickle/cc/cv/none */
 
     /* 故障 */
     std::string m_last_fault;
