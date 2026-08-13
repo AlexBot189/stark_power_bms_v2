@@ -51,6 +51,8 @@ enum class PowerProp {
     DISCHARGE_ENABLE, /* bool: 放电使能/禁止 */
     CHARGE_CURRENT_SET, /* int: 设置充电电流, mA */
     CHARGE_VOLTAGE_SET, /* int: 设置充电电压, mV */
+    SHUTDOWN,           /* bool: 关机 (写 true 触发, BMS 断开电池输出) */
+    STANDBY,            /* bool: 强制待机 (写 true 触发, 充电IC进待机) */
 
     /* 元数据 */
     MODEL_NAME,      /* string */

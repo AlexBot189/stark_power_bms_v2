@@ -26,6 +26,7 @@
 #include "power/PowerRegistry.h"
 #include "power/PowerManager.h"
 #include "power/ChargeStateMachine.h"
+#include "power/PowerRosAdapter.h"
 #include "power/plugins/ip2366/IP2366Source.h"
 #include "power/plugins/bms_uart/BmsUartSource.h"
 
@@ -176,6 +177,11 @@ main(int argc, char** argv)
     ros::Timer powerTimer = nh->createTimer(ros::Duration(1.0),
         [powerMgr](const ros::TimerEvent&) { powerMgr->tick(); });
     ECO_INFO("[main] power manager started (1Hz tick)");
+
+    /* 电源 ROS 接口适配器 (PowerCtrl/ChargeState/PowerState) */
+    auto powerRos = std::make_shared<PowerRosAdapter>(nh, powerMgr);
+    powerRos->Init();
+    ECO_INFO("[main] power ROS adapter started");
 
     /* 主循环 */
     ros::Rate rate(150);

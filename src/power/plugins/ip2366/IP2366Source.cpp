@@ -63,6 +63,7 @@ std::vector<PowerProp> IP2366Source::supportedProps() const
         PowerProp::CURRENT_NOW,
         PowerProp::CHARGE_ENABLE,
         PowerProp::CHARGE_CURRENT_SET,
+        PowerProp::STANDBY,
         PowerProp::MODEL_NAME,
     };
 }
@@ -212,6 +213,23 @@ bool IP2366Source::setProp(PowerProp prop, const PowerValue& val)
 
         m_cfg.charge_current_ma = static_cast<uint16_t>(iset * 100);
         ECO_INFO("[IP2366] charge current set: %u mA", m_cfg.charge_current_ma);
+        return true;
+    }
+
+    case PowerProp::STANDBY: {
+        if (!val.asBool()) {
+            return true; /* 待机是单向动作, false 无操作 */
+        }
+        /* bit7 待机使能 + bit6 写1进待机 (单次有效) */
+        if (!rmwReg(REG_SYS_CTL9, BIT_STANDBY_EN, BIT_STANDBY_EN)) {
+            ECO_ERROR("[IP2366] enable standby failed");
+            return false;
+        }
+        if (!rmwReg(REG_SYS_CTL9, BIT_STANDBY_ENTER, BIT_STANDBY_ENTER)) {
+            ECO_ERROR("[IP2366] enter standby failed");
+            return false;
+        }
+        ECO_INFO("[IP2366] force standby");
         return true;
     }
 

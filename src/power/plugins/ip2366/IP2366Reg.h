@@ -59,7 +59,8 @@ constexpr uint8_t MASK_RECHARGE_THRES = 0x0F;
 
 /* 0x09: 系统控制 9 — 待机使能和低电电压设置 */
 constexpr uint8_t REG_SYS_CTL9 = 0x09;
-constexpr uint8_t BIT_STANDBY_EN = 0x80; /* bit7: 待机使能 */
+constexpr uint8_t BIT_STANDBY_EN = 0x80;    /* bit7: 待机使能 */
+constexpr uint8_t BIT_STANDBY_ENTER = 0x40; /* bit6: 写 1 进待机(单次有效, 需 bit7=1) */
 
 /* 0x0D: PDO 档位选择 */
 constexpr uint8_t REG_SELECT_PDO = 0x0D;

@@ -38,7 +38,8 @@ stark_power_manager_node (同一进程)
 ├── PowerRegistry          — 电源设备注册表 (新增)
 ├── PowerManager           — 充电状态机 (新增)
 ├── IP2366Source           — IP2366 I2C 驱动 (新增)
-└── BmsUartSource          — BMS 数据包装 (已实现，对接 BatteryDispatcher)
+├── BmsUartSource          — BMS 数据包装 (已实现，对接 BatteryDispatcher)
+└── PowerRosAdapter        — ROS 接口适配 (新增, PowerCtrl/ChargeState/PowerState)
 ```
 
 ### 2.2 分层
@@ -381,3 +382,11 @@ src/power/
 - 新增: INT 超时兜底轮询 (1Hz, 防 INT 丢失)
 - 新增: 0x38 异常位写回清除 (对齐厂商 SDK)
 - 修正: TEMPERATURE 映射为 temperature_c × 10 (摄氏度×10)
+
+### V1.2 (2026-08-13)
+- 新增 PowerRosAdapter: ROS 接口适配器 (订阅 PowerCtrl, 发布 ChargeState/PowerState)
+- 新增 3 个 ROS 消息: PowerCtrl.msg / ChargeState.msg / PowerState.msg (msg/)
+- PowerProp 新增 SHUTDOWN / STANDBY 控制属性
+- BmsUartSource: SHUTDOWN → BMS 0x9001 断开电池输出
+- IP2366Source: STANDBY → 0x09 bit7 使能 + bit6 进待机
+- 关机/待机走 PowerRegistry::setProp 抽象, 不直接摸 BatteryDispatcher

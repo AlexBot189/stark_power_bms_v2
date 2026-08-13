@@ -47,6 +47,7 @@ std::vector<PowerProp> BmsUartSource::supportedProps() const
         PowerProp::CYCLE_COUNT,
         PowerProp::CHARGE_ENABLE,
         PowerProp::DISCHARGE_ENABLE,
+        PowerProp::SHUTDOWN,
         PowerProp::MODEL_NAME,
         PowerProp::VERSION,
     };
@@ -220,6 +221,17 @@ bool BmsUartSource::setProp(PowerProp prop, const PowerValue& val)
             BatteryMosCtrl::NO_ACTION,
             en ? BatteryMosCtrl::OPEN : BatteryMosCtrl::CLOSE);
         ECO_INFO("[BmsUartSource] discharge enable: %s", en ? "ON" : "OFF");
+        return true;
+    }
+
+    case PowerProp::SHUTDOWN: {
+        if (!val.asBool()) {
+            return true; /* 关机是单向动作, false 无操作 */
+        }
+        /* 0x9001 停止供电(即关机)延时休眠 */
+        m_dispatcher->SendControl(BatteryFunc::CONTROL, BatteryCmd::POWER_CTRL,
+                                  { BatteryPowerCtrl::POWER_OFF });
+        ECO_INFO("[BmsUartSource] shutdown (0x9001 POWER_OFF)");
         return true;
     }
 
