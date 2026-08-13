@@ -315,7 +315,7 @@ bool IP2366Source::initialize()
 bool IP2366Source::initGpio()
 {
     /* INT GPIO (输入, 双边沿) */
-    m_int_chip = gpiod_chip_open(m_cfg.int_gpio_chip.c_str());
+    m_int_chip = gpiod_chip_open_lookup(m_cfg.int_gpio_chip.c_str());
     if (!m_int_chip) {
         ECO_ERROR("[IP2366] open INT gpiochip %s failed: %s",
                   m_cfg.int_gpio_chip.c_str(), strerror(errno));
@@ -339,7 +339,7 @@ bool IP2366Source::initGpio()
              m_cfg.int_gpio_chip.c_str(), m_cfg.int_gpio_line);
 
     /* CHARGE_EN GPIO (输出, 初始低) */
-    m_charge_en_chip = gpiod_chip_open(m_cfg.charge_en_gpio_chip.c_str());
+    m_charge_en_chip = gpiod_chip_open_lookup(m_cfg.charge_en_gpio_chip.c_str());
     if (!m_charge_en_chip) {
         ECO_ERROR("[IP2366] open CHARGE_EN gpiochip %s failed: %s",
                   m_cfg.charge_en_gpio_chip.c_str(), strerror(errno));
