@@ -529,31 +529,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div style="font-size:0.8em;margin-top:4px;clear:both">版本: <span id="bv_ver" style="font-weight:600">--</span> &nbsp;|&nbsp; ID: <span id="bv_id" style="font-weight:600">--</span></div>
   </div>
 
-  <!-- fault status -->
+  <!-- fault status (只显示触发的故障) -->
   <div class="batt-card">
     <div class="blabel" style="margin-bottom:6px">故障状态</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px" id="batt_fault_grid">
-      <div class="batt-fault-row" style="font-weight:700;color:#0284c7;margin-top:4px"><span class="flbl">系统故障</span></div>
-      <div class="batt-fault-row"><span class="flbl">通信超时</span><span class="fval ok" id="bf_sys_comm">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">电芯NTC</span><span class="fval ok" id="bf_sys_cntc">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">MOS NTC</span><span class="fval ok" id="bf_sys_mntc">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">电芯/AFE/FUSE</span><span class="fval ok" id="bf_sys_cell">正常</span></div>
-      <div class="batt-fault-row" style="font-weight:700;color:#f59e0b;margin-top:4px"><span class="flbl">放电故障</span></div>
-      <div class="batt-fault-row"><span class="flbl">过放一级/二级</span><span class="fval ok" id="bf_dis_od">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">放电过流</span><span class="fval ok" id="bf_dis_oc">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">放电过温/低温</span><span class="fval ok" id="bf_dis_ot">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">放电短路/MOS</span><span class="fval ok" id="bf_dis_sc">正常</span></div>
-      <div class="batt-fault-row" style="font-weight:700;color:#dc2626;margin-top:4px"><span class="flbl">充电故障</span></div>
-      <div class="batt-fault-row"><span class="flbl">过充一级/二级</span><span class="fval ok" id="bf_chg_oc">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">充电过流</span><span class="fval ok" id="bf_chg_oi">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">充电过温</span><span class="fval ok" id="bf_chg_ot">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">充电器/MOS故障</span><span class="fval ok" id="bf_chg_cf">正常</span></div>
-      <div class="batt-fault-row"><span class="flbl">充电超时</span><span class="fval ok" id="bf_chg_ct">正常</span></div>
-      <div class="batt-fault-row" style="font-weight:700;color:#0ea5e9;margin-top:4px"><span class="flbl">电池包状态</span></div>
-      <div class="batt-fault-row"><span class="flbl">充电MOS</span><span class="fval ok" id="bf_st_cmos">--</span></div>
-      <div class="batt-fault-row"><span class="flbl">放电MOS</span><span class="fval ok" id="bf_st_dmos">--</span></div>
-      <div class="batt-fault-row"><span class="flbl">主控控制</span><span class="fval ok" id="bf_st_mctrl">--</span></div>
-    </div>
+    <div id="batt_fault_grid"></div>
   </div>
 
   <!-- battery log -->
@@ -592,6 +571,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="batt-card"><div class="blabel">充电进行中</div><div class="bvalue" id="pv_active">--</div></div>
       <div class="batt-card"><div class="blabel">充满</div><div class="bvalue" id="pv_full">--</div></div>
       <div class="batt-card"><div class="blabel">适配器</div><div class="bvalue" id="pv_adapter">--</div></div>
+      <div class="batt-card"><div class="blabel">充电MOS</div><div class="bvalue" id="pv_cmos">--</div></div>
+      <div class="batt-card"><div class="blabel">放电MOS</div><div class="bvalue" id="pv_dmos">--</div></div>
+      <div class="batt-card"><div class="blabel">主控控制</div><div class="bvalue" id="pv_mctrl">--</div></div>
       <div class="batt-card"><div class="blabel">故障</div><div class="bvalue" id="pv_fault">--</div></div>
     </div>
   </div>
@@ -1616,14 +1598,11 @@ function clearBattDisplay(){
   setBVI('bv_ver', '--');
   setBVI('bv_id', '--');
   for(var i = 1; i <= 6; i++){ setBVI('bcv_' + i, '--'); }
-  var faultIds = ['bf_sys_comm','bf_sys_cntc','bf_sys_mntc','bf_sys_cell',
-    'bf_dis_od','bf_dis_oc','bf_dis_ot','bf_dis_sc',
-    'bf_chg_oc','bf_chg_oi','bf_chg_ot','bf_chg_cf','bf_chg_ct',
-    'bf_st_cmos','bf_st_dmos','bf_st_mctrl'];
-  for(var i = 0; i < faultIds.length; i++){
-    var el = document.getElementById(faultIds[i]);
-    if(el){ el.textContent = '--'; el.className = 'fval ok'; }
-  }
+  setBV('pv_cmos', '--');
+  setBV('pv_dmos', '--');
+  setBV('pv_mctrl', '--');
+  var grid = document.getElementById('batt_fault_grid');
+  if(grid) grid.innerHTML = '<div class="batt-fault-row"><span class="fval ok">-- 等待数据 --</span></div>';
 }
 
 function refreshBattData(){
@@ -1699,24 +1678,42 @@ function handleBattFault(d){
   var c1 = d.chg_fault1 || 0, c2 = d.chg_fault2 || 0;
   var ps = d.pack_status || 0;
 
-  setBF('bf_sys_comm', (s1 & 0x01) != 0);
-  setBF('bf_sys_cntc', (s1 & 0x02) != 0 || (s1 & 0x08) != 0 || (s1 & 0x10) != 0);
-  setBF('bf_sys_mntc', (s1 & 0x04) != 0 || (s1 & 0x20) != 0 || (s1 & 0x40) != 0);
-  setBF('bf_sys_cell', (s2 & 0x07) != 0);
-  setBF('bf_dis_od',  (d1 & 0x01) != 0 || (d2 & 0x01) != 0);
-  setBF('bf_dis_oc',  (d1 & 0x02) != 0 || (d2 & 0x02) != 0);
-  setBF('bf_dis_ot',  (d1 & 0x1C) != 0);
-  setBF('bf_dis_sc',  (d2 & 0x0C) != 0);
-  setBF('bf_chg_oc',  (c1 & 0x01) != 0 || (c2 & 0x01) != 0);
-  setBF('bf_chg_oi',  (c1 & 0x02) != 0 || (c2 & 0x02) != 0);
-  setBF('bf_chg_ot',  (c1 & 0x04) != 0);
-  setBF('bf_chg_cf',  (c1 & 0x18) != 0);
-  setBF('bf_chg_ct',  (c1 & 0x20) != 0);
-  setBF('bf_st_cmos', (ps & 0x01) ? '开启' : '关闭');
-  setBF('bf_st_dmos', (ps & 0x02) ? '开启' : '关闭');
-  setBF('bf_st_mctrl', (ps & 0x0C) ? '主控控制中' : '未控制');
+  /* MOS 状态 → 充电状态区 */
+  setBV('pv_cmos', (ps & 0x01) ? '开启' : '关闭');
+  setBV('pv_dmos', (ps & 0x02) ? '开启' : '关闭');
+  setBV('pv_mctrl', (ps & 0x0C) ? '主控控制中' : '未控制');
 
-  var el;
+  /* 只收集触发的故障 */
+  var faults = [];
+  if(s1 & 0x01) faults.push('通信超时');
+  if((s1 & 0x02) || (s1 & 0x08) || (s1 & 0x10)) faults.push('电芯NTC故障');
+  if((s1 & 0x04) || (s1 & 0x20) || (s1 & 0x40)) faults.push('MOS NTC故障');
+  if(s2 & 0x07) faults.push('电芯/AFE/FUSE故障');
+  if((d1 & 0x01) || (d2 & 0x01)) faults.push('过放一级/二级');
+  if((d1 & 0x02) || (d2 & 0x02)) faults.push('放电过流');
+  if(d1 & 0x1C) faults.push('放电过温/低温');
+  if(d2 & 0x0C) faults.push('放电短路/MOS故障');
+  if((c1 & 0x01) || (c2 & 0x01)) faults.push('过充一级/二级');
+  if((c1 & 0x02) || (c2 & 0x02)) faults.push('充电过流');
+  if(c1 & 0x04) faults.push('充电过温');
+  if(c1 & 0x18) faults.push('充电器/MOS故障');
+  if(c1 & 0x20) faults.push('充电超时');
+
+  renderBattFault(faults);
+}
+
+function renderBattFault(faults){
+  var grid = document.getElementById('batt_fault_grid');
+  if(!grid) return;
+  if(faults.length === 0){
+    grid.innerHTML = '<div class="batt-fault-row"><span class="fval ok">✅ 正常</span></div>';
+    return;
+  }
+  var html = '';
+  for(var i = 0; i < faults.length; i++){
+    html += '<div class="batt-fault-row"><span class="fval err">⚠ ' + faults[i] + '</span></div>';
+  }
+  grid.innerHTML = html;
 }
 
 function handleBattInfo(d){
