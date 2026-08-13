@@ -302,6 +302,7 @@ bool IP2366Source::initialize()
 
     /* 5. 启动 INT 线程 */
     m_int_running = true;
+    m_chip_asleep = !i2c_ready; /* 启动时芯片未检测到 = 睡眠中, 兜底轮询不读 */
     m_int_thread = std::thread(&IP2366Source::intThreadFunc, this);
 
     ECO_INFO("[IP2366] initialized successfully");
@@ -678,10 +679,12 @@ void IP2366Source::intThreadFunc()
             break;
         }
         if (ret == 0) {
-            /* 超时兜底: 定期轮询状态, 防 INT 丢失或下降沿后无上升沿 */
+            /* 超时兜底: 芯片清醒时才轮询, 睡眠时跳过避免 I2C 报错 */
             if (++poll_count >= 10) {
                 poll_count = 0;
-                readChargeState();
+                if (!m_chip_asleep.load()) {
+                    readChargeState();
+                }
             }
             continue;
         }
@@ -701,6 +704,8 @@ void IP2366Source::intThreadFunc()
             usleep(100000); /* 100ms */
 
             if (!m_int_running) break;
+
+            m_chip_asleep = false; /* 芯片已唤醒 */
 
             /* 如果 I2C 未就绪, 重新打开 */
             if (m_i2c_fd < 0) {
@@ -739,6 +744,8 @@ void IP2366Source::intThreadFunc()
                 std::lock_guard<std::mutex> lock(m_mutex);
                 m_vbus_ok = false;
             }
+
+            m_chip_asleep = true; /* 芯片休眠/故障, 兜底轮询暂停 */
 
             notifyChange(PowerProp::ONLINE, PowerValue(false));
         }

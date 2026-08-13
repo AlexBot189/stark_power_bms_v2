@@ -142,6 +142,7 @@ private:
     /* ---- INT 线程 ---- */
     std::thread m_int_thread;
     std::atomic<bool> m_int_running{false};
+    std::atomic<bool> m_chip_asleep{true}; /* 芯片睡眠状态 (睡眠时兜底轮询不读 I2C) */
 
     /* ---- 变化回调 ---- */
     mutable std::mutex m_cb_mutex;
