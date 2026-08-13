@@ -137,7 +137,7 @@ BatteryDispatcher::Destroy()
 
     /*
      * 清空 Observer 回调列表, 防止 join 线程过程中调用已析构对象.
-     * 注意: BatteryRosAdapter 析构时也会调用 ClearCallbacks() 主动注销,
+     * 注意: StarkRosAdapter 析构时也会调用 ClearCallbacks() 主动注销,
      * 此处为保底: 若外部未正确注销, Destroy() 再做一次清空
      */
     ClearCallbacks();

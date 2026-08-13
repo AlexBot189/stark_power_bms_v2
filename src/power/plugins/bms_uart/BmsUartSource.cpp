@@ -258,7 +258,7 @@ void BmsUartSource::subscribe(ChangeCallback cb)
     /*
      * 当前设计采用轮询模型: PowerManager 在 1Hz tick 里通过 getProp 拉取,
      * 不依赖 push 通知。BatteryDispatcher 自身的 Observer 回调已由
-     * BatteryRosAdapter 消费, 此处不重复桥接, 避免跨线程回调复杂度。
+     * StarkRosAdapter 消费, 此处不重复桥接, 避免跨线程回调复杂度。
      */
     (void)cb;
 }

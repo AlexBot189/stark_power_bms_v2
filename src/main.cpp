@@ -22,11 +22,10 @@
 #include "config/ConfigStorage.hpp"
 #include "gw_adapter/WebServer.hpp"
 #include "battery/BatteryDispatcher.h"
-#include "battery/BatteryRosAdapter.hpp"
+#include "ros/StarkRosAdapter.h"
 #include "power/PowerRegistry.h"
 #include "power/PowerManager.h"
 #include "power/ChargeStateMachine.h"
-#include "power/PowerRosAdapter.h"
 #include "power/plugins/ip2366/IP2366Source.h"
 #include "power/plugins/bms_uart/BmsUartSource.h"
 
@@ -134,21 +133,6 @@ main(int argc, char** argv)
         ECO_WARN("WebServer disabled by config");
     }
 
-    /* 电池 ROS/WebSocket 适配器 */
-    auto pBatteryRos = std::make_shared<BatteryRosAdapter>(
-        nh, pBattery,
-        [pWebServer](const std::string& msg) {
-            if (pWebServer) pWebServer->BroadcastMessageToWebApp(msg);
-        });
-
-    if (pWebServer)
-    {
-        pWebServer->SetBatteryCtrlHandler(
-            [pBatteryRos](const std::string& msg) { pBatteryRos->HandleBatteryCtrl(msg); });
-        pWebServer->SetBatteryInfoHandler(
-            [pBattery]() { pBattery->QueryInfo(); });
-    }
-
     /* ================= 电源管理框架 (静态注册) ================= */
     /* 从 JSON 加载充电配置 (ip2366 + powerManager 两个 section) */
     auto ip2366Opt = ConfigStorage::GetInstance()->Get<Ip2366Option>();
@@ -211,10 +195,22 @@ main(int argc, char** argv)
         [powerMgr](const ros::TimerEvent&) { powerMgr->tick(); });
     ECO_INFO("[main] power manager started (1Hz tick)");
 
-    /* 电源 ROS 接口适配器 (PowerCtrl/ChargeState/PowerState) */
-    auto powerRos = std::make_shared<PowerRosAdapter>(nh, powerMgr);
-    powerRos->Init();
-    ECO_INFO("[main] power ROS adapter started");
+    /* 电池 + 电源 ROS 接口统一适配器 */
+    auto rosAdapter = std::make_shared<StarkRosAdapter>(
+        nh, pBattery, powerMgr,
+        [pWebServer](const std::string& msg) {
+            if (pWebServer) pWebServer->BroadcastMessageToWebApp(msg);
+        });
+    rosAdapter->Init();
+    ECO_INFO("[main] ROS adapter started");
+
+    if (pWebServer)
+    {
+        pWebServer->SetBatteryCtrlHandler(
+            [rosAdapter](const std::string& msg) { rosAdapter->HandleBatteryCtrl(msg); });
+        pWebServer->SetBatteryInfoHandler(
+            [pBattery]() { pBattery->QueryInfo(); });
+    }
 
     /* 主循环 */
     ros::Rate rate(150);

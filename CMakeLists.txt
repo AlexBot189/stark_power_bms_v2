@@ -55,6 +55,9 @@ link_directories(
 #     依赖库由DEPENDENCY_HARDWARE_LIST，DEPENDENCY_SYSTEM_LIST，DEPENDENCY_ROS_LIST三个变量指定，见eco_config.cmake
 include(eco_build)
 
+# 电池/电源 ROS 客户端工具 (独立可执行)
+add_custom_build(bin stark_power_cli "${CMAKE_CURRENT_SOURCE_DIR}/src/cli/stark_power_cli.cpp" "roscpp;std_msgs")
+
 # 使用自定义编译规则
 #add_custom_build(para1 para2 para3 para4)
 	# @para1: target 类型 [shared/bin/static]

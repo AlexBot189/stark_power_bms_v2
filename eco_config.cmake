@@ -55,7 +55,7 @@ set(CUSTOM_INLCUDE_PATH "${ECO_WORKSPACE_DIR}/release/include/")
 set(CUSTOM_LIBRARY_PATH "")
 #set(CUSTOM_LIBRARY_PATH "./src")
 #设置编译时需要忽视其中源码的文件夹，使用项目根目录下相对路径，用;隔开
-set(IGNORE_SOURCES_FOLDER "src/ros_adapter;src/protocol;src/drivers;src/interface;src/lidar_adpter")
+set(IGNORE_SOURCES_FOLDER "src/ros_adapter;src/protocol;src/drivers;src/interface;src/lidar_adpter;src/cli")
 
 #设置编译时需要忽视的源文件，仅需文件名，用;隔开l
 set(IGNORE_SOURCES_FILES "")
