@@ -1,6 +1,6 @@
 # 外骨骼助力机器人 — 电源管理系统设计
 
-> 版本: V1.1 | 日期: 2026-08-13 | 维护: zhiqiang.yang
+> 版本: V1.3 | 日期: 2026-08-13 | 维护: zhiqiang.yang
 
 ---
 
@@ -32,14 +32,13 @@
 stark_power_manager_node (同一进程)
 
 ├── BatteryDispatcher      — BMS UART 通信 (已有)
-├── BatteryRosAdapter      — ROS + WebSocket 广播 (已有)
 ├── WebServer              — WebSocket 服务 (已有)
 │
 ├── PowerRegistry          — 电源设备注册表 (新增)
 ├── PowerManager           — 充电状态机 (新增)
 ├── IP2366Source           — IP2366 I2C 驱动 (新增)
 ├── BmsUartSource          — BMS 数据包装 (已实现，对接 BatteryDispatcher)
-└── PowerRosAdapter        — ROS 接口适配 (新增, PowerCtrl/ChargeState/PowerState)
+└── StarkRosAdapter        — 电池+电源 ROS/WebSocket 统一接口 (新增)
 ```
 
 ### 2.2 分层
@@ -390,3 +389,16 @@ src/power/
 - BmsUartSource: SHUTDOWN → BMS 0x9001 断开电池输出
 - IP2366Source: STANDBY → 0x09 bit7 使能 + bit6 进待机
 - 关机/待机走 PowerRegistry::setProp 抽象, 不直接摸 BatteryDispatcher
+
+### V1.3 (2026-08-13)
+- 修复: I2C 地址 0xEA(8位) → 0x75(7位), 之前 IP2366 从未真正工作过
+- 修复: I2C 读写改用 ioctl(I2C_SMBUS) 直驱, 去掉 i2c-tools/libi2c 依赖
+- 修复: 配置合并为单一 JSON (batteryOption/web/ip2366/powerManager), 读不到回退默认值
+- 修复: P0 状态转换下发控制 (applyControl), 消除状态机只观察不行动
+- 修复: 充满改为关 IP2366 充电使能(不关 BMS MOS), 消除满电循环
+- 修复: 再充电/开始充电重新开 IP2366 使能, 修复充电状态与 BMS 状态不一致
+- 新增: 统一 ROS 接口 StarkRosAdapter (合并 BatteryRosAdapter + PowerRosAdapter)
+- 新增: 客户端工具 stark_power_cli (订阅电池/充电信息 + 发送控制指令)
+- 新增: PowerState 增加 IP2366 原始充电状态字段 (charger_active/full/voltage/phase)
+- 新增: 充电状态 + 电流/电压曲线 web 显示 (power_state WebSocket 广播, 参考电机曲线)
+- 新增: 故障显示动态化 (只显示触发的故障, MOS 状态移至充电状态区)
