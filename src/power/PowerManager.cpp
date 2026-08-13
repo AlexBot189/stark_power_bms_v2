@@ -541,25 +541,29 @@ void PowerManager::applyControl(ChargeEvent event)
 
     switch (event) {
     case ChargeEvent::ADAPTER_ONLINE:
-        /* 适配器插入/再充电: 通知 BMS 充电器接入 + 开充电 MOS */
+        /* 适配器插入/再充电: 通知 BMS + 开充电 MOS + 开 IP2366 充电使能 */
         reg.setProp("battery_bms", PowerProp::CHARGER_PRESENT, PowerValue(true));
         reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(true));
+        reg.setProp("charger_ip2366", PowerProp::CHARGE_ENABLE, PowerValue(true));
         break;
 
     case ChargeEvent::ADAPTER_OFFLINE:
-        /* 适配器拔出: 通知 BMS + 关充电 MOS */
+        /* 适配器拔出: 通知 BMS + 关充电 MOS + 关 IP2366 充电使能 */
         reg.setProp("battery_bms", PowerProp::CHARGER_PRESENT, PowerValue(false));
         reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(false));
+        reg.setProp("charger_ip2366", PowerProp::CHARGE_ENABLE, PowerValue(false));
         break;
 
     case ChargeEvent::PD_READY:
-        /* 开始充电: 确保充电 MOS 开 (IP2366 硬件自动走充电曲线) */
+        /* 开始充电: 确保充电 MOS 开 + IP2366 充电使能 (硬件自动走充电曲线) */
         reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(true));
+        reg.setProp("charger_ip2366", PowerProp::CHARGE_ENABLE, PowerValue(true));
         break;
 
     case ChargeEvent::CHARGE_FULL:
-        /* 充满: 关充电 MOS */
+        /* 充满: 双重停止 (关 BMS 充电 MOS + 关 IP2366 充电使能) */
         reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(false));
+        reg.setProp("charger_ip2366", PowerProp::CHARGE_ENABLE, PowerValue(false));
         break;
 
     case ChargeEvent::FAULT_DETECTED:
