@@ -1,6 +1,6 @@
 # 外骨骼助力机器人 — 电源管理系统设计
 
-> 版本: V1.3 | 日期: 2026-08-13 | 维护: zhiqiang.yang
+> 版本: V1.4 | 日期: 2026-08-13 | 维护: zhiqiang.yang
 
 ---
 
@@ -402,3 +402,9 @@ src/power/
 - 新增: PowerState 增加 IP2366 原始充电状态字段 (charger_active/full/voltage/phase)
 - 新增: 充电状态 + 电流/电压曲线 web 显示 (power_state WebSocket 广播, 参考电机曲线)
 - 新增: 故障显示动态化 (只显示触发的故障, MOS 状态移至充电状态区)
+
+### V1.4 (2026-08-13)
+- 长按 5s 关机功能: periph 节点长按校准按键 → 发布 PowerCtrl CTRL_SHUTDOWN → 本节点 0x9001 关机
+- 本节点零改动 (关机链路已有), periph 节点改动以 patch 交付 (不在本仓库)
+- 框架化: 关机触发统一走 PowerCtrl → PowerProp::SHUTDOWN → IPowerSource, 换 BMS 只换驱动
+- 外部触发源 (按键/命令/上层算法) 都发布标准 PowerCtrl, 电源框架不感知触发源
