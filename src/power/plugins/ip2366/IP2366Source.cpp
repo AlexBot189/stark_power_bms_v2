@@ -11,6 +11,7 @@
 #include <sys/ioctl.h>
 
 #include <linux/i2c-dev.h>
+#include <linux/i2c.h>
 #include <gpiod.h>
 
 #include <log_helper/LogHelper.h>
@@ -400,14 +401,21 @@ bool IP2366Source::readReg(uint8_t reg, uint8_t& val)
         return false;
     }
 
-    int32_t ret = i2c_smbus_read_byte_data(m_i2c_fd, reg);
-    if (ret < 0) {
+    /* 直接走内核 I2C_SMBUS ioctl, 不依赖 i2c-tools 的 libi2c */
+    union i2c_smbus_data data = {};
+    struct i2c_smbus_ioctl_data args;
+    args.read_write = I2C_SMBUS_READ;
+    args.command    = reg;
+    args.size       = I2C_SMBUS_BYTE_DATA;
+    args.data       = &data;
+
+    if (ioctl(m_i2c_fd, I2C_SMBUS, &args) < 0) {
         ECO_WARN("[IP2366] I2C read reg 0x%02X failed: %s",
                  reg, strerror(errno));
         return false;
     }
 
-    val = static_cast<uint8_t>(ret);
+    val = data.byte;
     return true;
 }
 
@@ -417,8 +425,16 @@ bool IP2366Source::writeReg(uint8_t reg, uint8_t val)
         return false;
     }
 
-    int ret = i2c_smbus_write_byte_data(m_i2c_fd, reg, val);
-    if (ret < 0) {
+    /* 直接走内核 I2C_SMBUS ioctl, 不依赖 i2c-tools 的 libi2c */
+    union i2c_smbus_data data = {};
+    struct i2c_smbus_ioctl_data args;
+    data.byte      = val;
+    args.read_write = I2C_SMBUS_WRITE;
+    args.command    = reg;
+    args.size       = I2C_SMBUS_BYTE_DATA;
+    args.data       = &data;
+
+    if (ioctl(m_i2c_fd, I2C_SMBUS, &args) < 0) {
         ECO_WARN("[IP2366] I2C write reg 0x%02X=0x%02X failed: %s",
                  reg, val, strerror(errno));
         return false;
