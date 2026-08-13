@@ -558,8 +558,8 @@ void PowerManager::applyControl(ChargeEvent event)
         break;
 
     case ChargeEvent::CHARGE_FULL:
-        /* 充满: 关充电 MOS */
-        reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(false));
+        /* 充满: 关 IP2366 充电使能 (不关 BMS MOS), 停止充电, 消除满电循环 */
+        reg.setProp("charger_ip2366", PowerProp::CHARGE_ENABLE, PowerValue(false));
         break;
 
     case ChargeEvent::FAULT_DETECTED:
