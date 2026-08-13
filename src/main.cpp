@@ -150,8 +150,41 @@ main(int argc, char** argv)
     }
 
     /* ================= 电源管理框架 (静态注册) ================= */
+    /* 从 JSON 加载充电配置 (ip2366 + powerManager 两个 section) */
+    auto ip2366Opt = ConfigStorage::GetInstance()->Get<Ip2366Option>();
+    auto powerOpt  = ConfigStorage::GetInstance()->Get<PowerManagerOption>();
+
+    IP2366Source::Config ip2366Cfg;
+    ip2366Cfg.i2c_dev             = ip2366Opt.i2c_dev;
+    ip2366Cfg.addr                = static_cast<uint8_t>(ip2366Opt.i2c_addr);
+    ip2366Cfg.int_gpio_chip       = ip2366Opt.int_gpio_chip;
+    ip2366Cfg.int_gpio_line       = ip2366Opt.int_gpio_line;
+    ip2366Cfg.charge_en_gpio_chip = ip2366Opt.charge_en_gpio_chip;
+    ip2366Cfg.charge_en_gpio_line = ip2366Opt.charge_en_gpio_line;
+    ip2366Cfg.pdo_select          = static_cast<uint8_t>(ip2366Opt.pdo_select);
+    ip2366Cfg.charge_voltage_mv   = static_cast<uint16_t>(ip2366Opt.charge_voltage_mv);
+    ip2366Cfg.charge_current_ma   = static_cast<uint16_t>(ip2366Opt.charge_current_ma);
+    ip2366Cfg.trickle_current_ma  = static_cast<uint16_t>(ip2366Opt.trickle_current_ma);
+    ip2366Cfg.stop_current_ma     = static_cast<uint16_t>(ip2366Opt.stop_current_ma);
+    ip2366Cfg.int_poll_interval_ms = static_cast<uint32_t>(ip2366Opt.int_poll_interval_ms);
+
+    PowerManagerConfig powerCfg;
+    powerCfg.adapter_debounce_ms  = powerOpt.adapter_debounce_ms;
+    powerCfg.fault_debounce_ms    = powerOpt.fault_debounce_ms;
+    powerCfg.recovery_debounce_ms = powerOpt.recovery_debounce_ms;
+    powerCfg.full_soc_percent     = powerOpt.full_soc_percent;
+    powerCfg.full_current_ma      = powerOpt.full_current_ma;
+    powerCfg.recharge_hyst_mv     = powerOpt.recharge_hyst_mv;
+    powerCfg.cc_timeout_min       = powerOpt.cc_timeout_min;
+    powerCfg.total_timeout_min    = powerOpt.total_timeout_min;
+    powerCfg.max_temp_c           = powerOpt.max_temp_c;
+    powerCfg.resume_temp_c        = powerOpt.resume_temp_c;
+    powerCfg.pd_timeout_ms        = powerOpt.pd_timeout_ms;
+    powerCfg.cross_verify_charge  = powerOpt.cross_verify_charge;
+    powerCfg.vbus_present_mv      = powerOpt.vbus_present_mv;
+
     /* 充电 IC 数据源 (I2C + INT GPIO), 初始化失败则降级为仅 BMS */
-    std::unique_ptr<IP2366Source> ip2366(new IP2366Source(IP2366Source::Config{}));
+    std::unique_ptr<IP2366Source> ip2366(new IP2366Source(ip2366Cfg));
     if (ip2366->initialize()) {
         PowerRegistry::instance().registerSource(std::move(ip2366));
         ECO_INFO("[main] IP2366 charger source registered");
@@ -165,7 +198,7 @@ main(int argc, char** argv)
     ECO_INFO("[main] battery_bms source registered");
 
     /* 充电管理器 (1Hz tick 驱动状态机) */
-    auto powerMgr = std::make_shared<PowerManager>();
+    auto powerMgr = std::make_shared<PowerManager>(powerCfg);
     powerMgr->initialize();
     powerMgr->setStateChangeCb([](ChargeState from, ChargeState to) {
         ECO_INFO("[PowerManager] state: %s -> %s",

@@ -102,6 +102,77 @@ ParseWebOption(const nJson& rootJson, WebOption& webOption)
     }
 }
 
+inline void
+ParseIp2366Option(const nJson& rootJson, Ip2366Option& o)
+{
+    if (!rootJson.is_object() || rootJson.find("ip2366") == rootJson.end())
+    {
+        ECO_WARN("No 'ip2366' key, using defaults");
+        return;
+    }
+
+    const auto& p = rootJson["ip2366"];
+    try
+    {
+        if (p.count("i2cDev"))              o.i2c_dev = p["i2cDev"].get<std::string>();
+        if (p.count("i2cAddr"))             o.i2c_addr = p["i2cAddr"].get<int>();
+        if (p.count("intGpioChip"))         o.int_gpio_chip = p["intGpioChip"].get<std::string>();
+        if (p.count("intGpioLine"))         o.int_gpio_line = p["intGpioLine"].get<int>();
+        if (p.count("chargeEnGpioChip"))    o.charge_en_gpio_chip = p["chargeEnGpioChip"].get<std::string>();
+        if (p.count("chargeEnGpioLine"))    o.charge_en_gpio_line = p["chargeEnGpioLine"].get<int>();
+        if (p.count("pdoSelect"))           o.pdo_select = p["pdoSelect"].get<int>();
+        if (p.count("chargeVoltageMv"))     o.charge_voltage_mv = p["chargeVoltageMv"].get<int>();
+        if (p.count("chargeCurrentMa"))     o.charge_current_ma = p["chargeCurrentMa"].get<int>();
+        if (p.count("trickleCurrentMa"))    o.trickle_current_ma = p["trickleCurrentMa"].get<int>();
+        if (p.count("stopCurrentMa"))       o.stop_current_ma = p["stopCurrentMa"].get<int>();
+        if (p.count("intPollIntervalMs"))   o.int_poll_interval_ms = p["intPollIntervalMs"].get<int>();
+
+        ECO_INFO("ip2366 i2c=%s addr=0x%02X int=%s:%d chg_en=%s:%d",
+                 o.i2c_dev.c_str(), o.i2c_addr,
+                 o.int_gpio_chip.c_str(), o.int_gpio_line,
+                 o.charge_en_gpio_chip.c_str(), o.charge_en_gpio_line);
+    }
+    catch (const std::exception& e)
+    {
+        ECO_ERROR("Parse ip2366 option failed: %s, using defaults", e.what());
+    }
+}
+
+inline void
+ParsePowerManagerOption(const nJson& rootJson, PowerManagerOption& o)
+{
+    if (!rootJson.is_object() || rootJson.find("powerManager") == rootJson.end())
+    {
+        ECO_WARN("No 'powerManager' key, using defaults");
+        return;
+    }
+
+    const auto& p = rootJson["powerManager"];
+    try
+    {
+        if (p.count("adapterDebounceMs"))   o.adapter_debounce_ms = p["adapterDebounceMs"].get<int>();
+        if (p.count("faultDebounceMs"))     o.fault_debounce_ms = p["faultDebounceMs"].get<int>();
+        if (p.count("recoveryDebounceMs"))  o.recovery_debounce_ms = p["recoveryDebounceMs"].get<int>();
+        if (p.count("fullSocPercent"))      o.full_soc_percent = p["fullSocPercent"].get<int>();
+        if (p.count("fullCurrentMa"))       o.full_current_ma = p["fullCurrentMa"].get<int>();
+        if (p.count("rechargeHystMv"))      o.recharge_hyst_mv = p["rechargeHystMv"].get<int>();
+        if (p.count("ccTimeoutMin"))        o.cc_timeout_min = p["ccTimeoutMin"].get<int>();
+        if (p.count("totalTimeoutMin"))     o.total_timeout_min = p["totalTimeoutMin"].get<int>();
+        if (p.count("maxTempC"))            o.max_temp_c = p["maxTempC"].get<int>();
+        if (p.count("resumeTempC"))         o.resume_temp_c = p["resumeTempC"].get<int>();
+        if (p.count("pdTimeoutMs"))         o.pd_timeout_ms = p["pdTimeoutMs"].get<int>();
+        if (p.count("crossVerifyCharge"))   o.cross_verify_charge = p["crossVerifyCharge"].get<bool>();
+        if (p.count("vbusPresentMv"))       o.vbus_present_mv = p["vbusPresentMv"].get<int>();
+
+        ECO_INFO("powerManager crossVerify=%s maxTemp=%dC",
+                 o.cross_verify_charge ? "true" : "false", o.max_temp_c);
+    }
+    catch (const std::exception& e)
+    {
+        ECO_ERROR("Parse powerManager option failed: %s, using defaults", e.what());
+    }
+}
+
 std::mutex ConfigStorage::m_singleMutex;
 std::shared_ptr<ConfigStorage> ConfigStorage::m_instance{ nullptr };
 
@@ -133,6 +204,8 @@ ConfigStorage::LoadFromJson(const std::string& configPath)
     auto rootJson = LoadConfigFile2Json(configPath, m_strConfigFile);
     ParseBatteryOption(rootJson, m_batteryOption);
     ParseWebOption(rootJson, m_webOption);
+    ParseIp2366Option(rootJson, m_ip2366Option);
+    ParsePowerManagerOption(rootJson, m_powerOption);
 }
 
 boost::any
@@ -145,6 +218,14 @@ ConfigStorage::GetAny(const TypeId& type)
     else if (typeid(WebOption) == type)
     {
         return m_webOption;
+    }
+    else if (typeid(Ip2366Option) == type)
+    {
+        return m_ip2366Option;
+    }
+    else if (typeid(PowerManagerOption) == type)
+    {
+        return m_powerOption;
     }
     else
     {

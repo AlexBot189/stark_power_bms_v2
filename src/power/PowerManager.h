@@ -94,6 +94,9 @@ private:
     void tickFull();
     void tickFault();
 
+    /* 状态转换时的控制下发 (开/关充电 MOS, 通知 BMS 充电器状态等) */
+    void applyControl(ChargeEvent event);
+
     /* 从 PowerRegistry 读双数据源 */
     bool readChargerStatus();
     bool readBatteryStatus();

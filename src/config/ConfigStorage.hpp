@@ -45,6 +45,8 @@ private:
     std::string m_strConfigFile;
     BatteryOption m_batteryOption;
     WebOption m_webOption;
+    Ip2366Option m_ip2366Option;
+    PowerManagerOption m_powerOption;
 
     static std::mutex m_singleMutex;
     static std::shared_ptr<ConfigStorage> m_instance;

@@ -1,0 +1,46 @@
+{
+    "batteryOption": {
+        "tty": "/dev/ttyS6",
+        "baudRate": 115200,
+        "pollPeriodMs": 200,
+        "faultPeriodMs": 10000,
+        "enableVoltage": true,
+        "enableCurrentTemp": true,
+        "enableSocCapacity": true,
+        "enableFault": true,
+        "enableChargeCurrent": false
+    },
+    "web": {
+        "enabled": true,
+        "port": 50080
+    },
+    "ip2366": {
+        "i2cDev": "/dev/i2c-2",
+        "i2cAddr": 234,
+        "intGpioChip": "gpiochip0",
+        "intGpioLine": 39,
+        "chargeEnGpioChip": "gpiochip2",
+        "chargeEnGpioLine": 4,
+        "pdoSelect": 5,
+        "chargeVoltageMv": 4200,
+        "chargeCurrentMa": 3000,
+        "trickleCurrentMa": 200,
+        "stopCurrentMa": 100,
+        "intPollIntervalMs": 100
+    },
+    "powerManager": {
+        "adapterDebounceMs": 200,
+        "faultDebounceMs": 500,
+        "recoveryDebounceMs": 2000,
+        "fullSocPercent": 100,
+        "fullCurrentMa": 200,
+        "rechargeHystMv": 200,
+        "ccTimeoutMin": 240,
+        "totalTimeoutMin": 480,
+        "maxTempC": 85,
+        "resumeTempC": 75,
+        "pdTimeoutMs": 10000,
+        "crossVerifyCharge": true,
+        "vbusPresentMv": 4000
+    }
+}

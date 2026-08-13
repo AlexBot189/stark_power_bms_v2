@@ -86,6 +86,7 @@ void PowerManager::tickIdle()
         if (m_sm.transition(ChargeEvent::ADAPTER_ONLINE)) {
             m_detect_started_at = std::chrono::steady_clock::now();
             m_fault_debouncing = false;
+            applyControl(ChargeEvent::ADAPTER_ONLINE);
             notifyStateChange(prev, m_sm.current);
         }
     }
@@ -101,6 +102,7 @@ void PowerManager::tickDetect()
         ChargeState prev = m_sm.current;
         if (m_sm.transition(ChargeEvent::ADAPTER_OFFLINE)) {
             m_fault_debouncing = false;
+            applyControl(ChargeEvent::ADAPTER_OFFLINE);
             notifyStateChange(prev, m_sm.current);
         }
         return;
@@ -112,6 +114,7 @@ void PowerManager::tickDetect()
             ChargeState prev = m_sm.current;
             if (m_sm.transition(ChargeEvent::FAULT_DETECTED)) {
                 notifyFault(m_last_fault.c_str());
+                applyControl(ChargeEvent::FAULT_DETECTED);
                 notifyStateChange(prev, m_sm.current);
             }
         }
@@ -126,6 +129,7 @@ void PowerManager::tickDetect()
         if (m_sm.transition(ChargeEvent::PD_READY)) {
             m_charge_started_at = std::chrono::steady_clock::now();
             m_fault_debouncing = false;
+            applyControl(ChargeEvent::PD_READY);
             notifyStateChange(prev, m_sm.current);
         }
         return;
@@ -140,6 +144,7 @@ void PowerManager::tickDetect()
         ChargeState prev = m_sm.current;
         if (m_sm.transition(ChargeEvent::FAULT_DETECTED)) {
             notifyFault(m_last_fault.c_str());
+            applyControl(ChargeEvent::FAULT_DETECTED);
             notifyStateChange(prev, m_sm.current);
         }
     }
@@ -155,6 +160,7 @@ void PowerManager::tickCharge()
         ChargeState prev = m_sm.current;
         if (m_sm.transition(ChargeEvent::ADAPTER_OFFLINE)) {
             m_fault_debouncing = false;
+            applyControl(ChargeEvent::ADAPTER_OFFLINE);
             notifyStateChange(prev, m_sm.current);
         }
         return;
@@ -166,6 +172,7 @@ void PowerManager::tickCharge()
             ChargeState prev = m_sm.current;
             if (m_sm.transition(ChargeEvent::FAULT_DETECTED)) {
                 notifyFault(m_last_fault.c_str());
+                applyControl(ChargeEvent::FAULT_DETECTED);
                 notifyStateChange(prev, m_sm.current);
             }
         }
@@ -180,6 +187,7 @@ void PowerManager::tickCharge()
         ChargeState prev = m_sm.current;
         if (m_sm.transition(ChargeEvent::CHARGE_FULL)) {
             m_fault_debouncing = false;
+            applyControl(ChargeEvent::CHARGE_FULL);
             notifyStateChange(prev, m_sm.current);
         }
     }
@@ -195,6 +203,7 @@ void PowerManager::tickFull()
         ChargeState prev = m_sm.current;
         if (m_sm.transition(ChargeEvent::ADAPTER_OFFLINE)) {
             m_fault_debouncing = false;
+            applyControl(ChargeEvent::ADAPTER_OFFLINE);
             notifyStateChange(prev, m_sm.current);
         }
         return;
@@ -206,6 +215,7 @@ void PowerManager::tickFull()
             ChargeState prev = m_sm.current;
             if (m_sm.transition(ChargeEvent::FAULT_DETECTED)) {
                 notifyFault(m_last_fault.c_str());
+                applyControl(ChargeEvent::FAULT_DETECTED);
                 notifyStateChange(prev, m_sm.current);
             }
         }
@@ -221,6 +231,7 @@ void PowerManager::tickFull()
         if (m_sm.transition(ChargeEvent::ADAPTER_ONLINE)) {
             m_charge_started_at = std::chrono::steady_clock::now();
             m_fault_debouncing = false;
+            applyControl(ChargeEvent::ADAPTER_ONLINE);
             notifyStateChange(prev, m_sm.current);
         }
     }
@@ -517,6 +528,50 @@ bool PowerManager::recoveryDebounced()
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - m_recovery_started_at).count();
     return elapsed >= m_cfg.recovery_debounce_ms;
+}
+
+/*
+ * 状态转换时的控制下发
+ * 事件驱动: 根据触发转换的事件, 下发对应的硬件控制指令
+ * (fire-and-forget, 底层驱动的错误由各自 setProp 内部打日志)
+ */
+void PowerManager::applyControl(ChargeEvent event)
+{
+    auto& reg = PowerRegistry::instance();
+
+    switch (event) {
+    case ChargeEvent::ADAPTER_ONLINE:
+        /* 适配器插入/再充电: 通知 BMS 充电器接入 + 开充电 MOS */
+        reg.setProp("battery_bms", PowerProp::CHARGER_PRESENT, PowerValue(true));
+        reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(true));
+        break;
+
+    case ChargeEvent::ADAPTER_OFFLINE:
+        /* 适配器拔出: 通知 BMS + 关充电 MOS */
+        reg.setProp("battery_bms", PowerProp::CHARGER_PRESENT, PowerValue(false));
+        reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(false));
+        break;
+
+    case ChargeEvent::PD_READY:
+        /* 开始充电: 确保充电 MOS 开 (IP2366 硬件自动走充电曲线) */
+        reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(true));
+        break;
+
+    case ChargeEvent::CHARGE_FULL:
+        /* 充满: 关充电 MOS */
+        reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(false));
+        break;
+
+    case ChargeEvent::FAULT_DETECTED:
+        /* 故障: 关 IP2366 充电 + 关充电 MOS + 关放电 MOS (防御纵深) */
+        reg.setProp("charger_ip2366", PowerProp::CHARGE_ENABLE, PowerValue(false));
+        reg.setProp("battery_bms", PowerProp::CHARGE_ENABLE, PowerValue(false));
+        reg.setProp("battery_bms", PowerProp::DISCHARGE_ENABLE, PowerValue(false));
+        break;
+
+    default:
+        break;
+    }
 }
 
 /*

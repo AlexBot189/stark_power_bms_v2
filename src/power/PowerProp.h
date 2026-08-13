@@ -53,6 +53,7 @@ enum class PowerProp {
     CHARGE_VOLTAGE_SET, /* int: 设置充电电压, mV */
     SHUTDOWN,           /* bool: 关机 (写 true 触发, BMS 断开电池输出) */
     STANDBY,            /* bool: 强制待机 (写 true 触发, 充电IC进待机) */
+    CHARGER_PRESENT,    /* bool: 通知 BMS 充电器接入状态 (0x2006) */
 
     /* 元数据 */
     MODEL_NAME,      /* string */

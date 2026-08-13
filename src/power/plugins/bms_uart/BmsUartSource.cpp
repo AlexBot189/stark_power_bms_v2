@@ -48,6 +48,7 @@ std::vector<PowerProp> BmsUartSource::supportedProps() const
         PowerProp::CHARGE_ENABLE,
         PowerProp::DISCHARGE_ENABLE,
         PowerProp::SHUTDOWN,
+        PowerProp::CHARGER_PRESENT,
         PowerProp::MODEL_NAME,
         PowerProp::VERSION,
     };
@@ -232,6 +233,14 @@ bool BmsUartSource::setProp(PowerProp prop, const PowerValue& val)
         m_dispatcher->SendControl(BatteryFunc::CONTROL, BatteryCmd::POWER_CTRL,
                                   { BatteryPowerCtrl::POWER_OFF });
         ECO_INFO("[BmsUartSource] shutdown (0x9001 POWER_OFF)");
+        return true;
+    }
+
+    case PowerProp::CHARGER_PRESENT: {
+        /* 0x2006 充电器接入通知 */
+        bool plugged = val.asBool();
+        m_dispatcher->SetChargerStatus(plugged);
+        ECO_INFO("[BmsUartSource] charger present: %s", plugged ? "YES" : "NO");
         return true;
     }
 
