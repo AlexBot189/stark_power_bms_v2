@@ -340,6 +340,30 @@ StarkRosAdapter::PublishPowerState(const ros::TimerEvent&)
     stark_msgs::PowerState ps;
     FillPowerState(ps);
     m_powerStatePub.publish(ps);
+
+    /* WebSocket 广播充电状态 (供 web 调试工具实时显示) */
+    if (m_wsBroadcast) {
+        nJson data;
+        data["charge_state"]      = ps.charge_state;
+        data["adapter_online"]    = ps.adapter_online;
+        data["batt_voltage_mv"]   = ps.batt_voltage_mv;
+        data["batt_current_ma"]   = ps.batt_current_ma;
+        data["batt_temp_c"]       = ps.batt_temp_c;
+        data["batt_soc"]          = ps.batt_soc;
+        data["charge_type"]       = ps.charge_type;
+        data["charge_current_ma"] = ps.charge_current_ma;
+        data["charger_active"]    = ps.charger_active;
+        data["charger_full"]      = ps.charger_full;
+        data["charger_voltage_mv"] = ps.charger_voltage_mv;
+        data["charger_phase"]     = ps.charger_phase;
+        data["fault"]             = ps.fault;
+        data["fault_reason"]      = ps.fault_reason;
+
+        nJson root;
+        root["channel"] = "power_state";
+        root["data"]    = data;
+        m_wsBroadcast(root.dump());
+    }
 }
 
 void
