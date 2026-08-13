@@ -22,6 +22,10 @@ uint8  batt_soc         # SOC %
 # 充电器 (IP2366)
 uint8  charge_type      # 充电阶段 0=none 1=trickle 2=cc 3=cv
 uint16 charge_current_ma # 充电电流 mA
+bool   charger_active   # 充电进行中 (IP2366 0x31 bit5)
+bool   charger_full     # 充满标志 (IP2366 0x31 bit4)
+uint16 charger_voltage_mv # IP2366 端电池电压 mV
+uint8  charger_phase    # 完整充电阶段 0=待机 1=涓流 2=CC 3=CV 4=等待 5=充满 6=超时
 
 # 故障
 bool   fault            # 是否有故障

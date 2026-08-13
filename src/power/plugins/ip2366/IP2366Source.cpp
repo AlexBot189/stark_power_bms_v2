@@ -60,6 +60,9 @@ std::vector<PowerProp> IP2366Source::supportedProps() const
         PowerProp::CHARGE_TYPE,
         PowerProp::FAULT,
         PowerProp::FAULT_REASON,
+        PowerProp::CHARGER_ACTIVE,
+        PowerProp::CHARGER_FULL,
+        PowerProp::CHARGER_PHASE,
         PowerProp::VOLTAGE_NOW,
         PowerProp::CURRENT_NOW,
         PowerProp::CHARGE_ENABLE,
@@ -135,6 +138,18 @@ bool IP2366Source::getProp(PowerProp prop, PowerValue& out)
         out = PowerValue(reason);
         return true;
     }
+
+    case PowerProp::CHARGER_ACTIVE:
+        out = PowerValue(m_chg_active);
+        return true;
+
+    case PowerProp::CHARGER_FULL:
+        out = PowerValue(m_chg_end);
+        return true;
+
+    case PowerProp::CHARGER_PHASE:
+        out = PowerValue(static_cast<int64_t>(m_chg_state));
+        return true;
 
     case PowerProp::VOLTAGE_NOW:
         out = PowerValue(static_cast<int64_t>(m_batt_voltage_mv));

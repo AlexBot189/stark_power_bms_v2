@@ -21,6 +21,9 @@ enum class PowerProp {
     CHARGE_TYPE,     /* 充电阶段: "none"/"trickle"/"cc"/"cv" */
     FAULT,           /* bool: 是否有故障 */
     FAULT_REASON,    /* string: 故障原因 */
+    CHARGER_ACTIVE,  /* bool: 充电进行中 (IP2366 0x31 bit5) */
+    CHARGER_FULL,    /* bool: 充满标志 (IP2366 0x31 bit4) */
+    CHARGER_PHASE,   /* int: 充电阶段 0-6 (0待机/1涓流/2CC/3CV/4等待/5充满/6超时) */
 
     /* 测量类 (统一单位) */
     VOLTAGE_NOW,     /* int: 当前电压, mV */

@@ -177,6 +177,18 @@ void PowerRosAdapter::FillPowerState(stark_msgs::PowerState& msg)
     if (reg.getProp("charger_ip2366", PowerProp::CURRENT_NOW, v)) {
         msg.charge_current_ma = static_cast<uint16_t>(v.asInt());
     }
+    if (reg.getProp("charger_ip2366", PowerProp::CHARGER_ACTIVE, v)) {
+        msg.charger_active = v.asBool();
+    }
+    if (reg.getProp("charger_ip2366", PowerProp::CHARGER_FULL, v)) {
+        msg.charger_full = v.asBool();
+    }
+    if (reg.getProp("charger_ip2366", PowerProp::VOLTAGE_NOW, v)) {
+        msg.charger_voltage_mv = static_cast<uint16_t>(v.asInt());
+    }
+    if (reg.getProp("charger_ip2366", PowerProp::CHARGER_PHASE, v)) {
+        msg.charger_phase = static_cast<uint8_t>(v.asInt());
+    }
 
     /* 故障 */
     bool fault = false;
