@@ -5,7 +5,7 @@
             "type": "charger",
             "config": {
                 "i2c_dev": "/dev/i2c-2",
-                "addr": 234,
+                "addr": 117,
                 "int_gpio_chip": "gpiochip0",
                 "int_gpio_line": 39,
                 "charge_en_gpio_chip": "gpiochip2",

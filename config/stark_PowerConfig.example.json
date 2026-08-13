@@ -16,7 +16,7 @@
     },
     "ip2366": {
         "i2cDev": "/dev/i2c-2",
-        "i2cAddr": 234,
+        "i2cAddr": 117,
         "intGpioChip": "gpiochip0",
         "intGpioLine": 39,
         "chargeEnGpioChip": "gpiochip2",

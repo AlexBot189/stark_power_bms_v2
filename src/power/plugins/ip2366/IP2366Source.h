@@ -5,7 +5,7 @@
  * 实现 IPowerSource 接口, 封装 IP2366 I2C 通信和 INT 中断处理。
  *
  * 硬件连接:
- *   - I2C: /dev/i2c-2, 从机地址 0xEA
+ *   - I2C: /dev/i2c-2, 从机地址 0x75 (7-bit)
  *   - INT: GPIO0_C7 (双向: 唤醒通知 + 故障通知)
  *   - CHARGE_EN: GPIO2_A4 (硬件充电通路开关)
  *

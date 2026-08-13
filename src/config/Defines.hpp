@@ -34,7 +34,7 @@ struct WebOption {
 /* IP2366 快充芯片配置 (对应 IP2366Source::Config) */
 struct Ip2366Option {
     std::string i2c_dev{ "/dev/i2c-2" };
-    int         i2c_addr{ 0xEA };
+    int         i2c_addr{ 0x75 };          /* 7-bit 从机地址 (i2cdetect 显示值) */
     std::string int_gpio_chip{ "gpiochip0" };
     int         int_gpio_line{ 39 };       /* GPIO0_C7 */
     std::string charge_en_gpio_chip{ "gpiochip2" };

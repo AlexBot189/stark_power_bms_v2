@@ -3,7 +3,7 @@
  * Copyright (c) 2026 zhiqiang.yang
  *
  * 英集芯 IP2366: 6S 锂电快充管理芯片
- * I2C 从机地址 0xEA, 支持 PD/QC 快充协议输入。
+ * I2C 从机地址 0x75 (7-bit), 支持 PD/QC 快充协议输入。
  *
  * 关键约束:
  *   1. 16位 ADC 必须先读低字节再读高字节, 读低触发硬件锁存更新
@@ -16,8 +16,8 @@
 
 namespace stark_power_manager {
 
-/* I2C 从机地址 */
-constexpr uint8_t IP2366_ADDR = 0xEA;
+/* I2C 从机地址 (7-bit; i2cdetect 显示 0x75; 数据手册 0xEA = 0x75<<1 是 8 位写地址) */
+constexpr uint8_t IP2366_ADDR = 0x75;
 
 /* ================================================================
  * 控制寄存器 (读写)

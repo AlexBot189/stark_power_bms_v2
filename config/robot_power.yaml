@@ -9,7 +9,7 @@ power_sources:
     config:
       # I2C 通信
       i2c_dev: "/dev/i2c-2"
-      addr: 0xEA
+      addr: 0x75
 
       # GPIO
       int_gpio_chip: "gpiochip0"
