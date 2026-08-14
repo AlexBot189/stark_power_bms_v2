@@ -46,6 +46,12 @@ constexpr uint8_t REG_SYS_CTL2 = 0x02;
 constexpr uint8_t REG_SYS_CTL3 = 0x03;
 /* Iset = N * 100mA, 例: 3000mA -> N=30 */
 
+/* 0x04: 系统控制 4 — 电池串联节数 */
+constexpr uint8_t REG_SYS_CTL4 = 0x04;
+/* [2:0]: 电池串数 (2-6), 本板 6S */
+constexpr uint8_t MASK_BAT_NUM = 0x07;
+constexpr uint8_t BAT_NUM_6S   = 6;
+
 /* 0x06: 系统控制 6 — 涓流电流 */
 constexpr uint8_t REG_SYS_CTL6 = 0x06;
 /* Itrickle = N * 50mA */
@@ -54,8 +60,10 @@ constexpr uint8_t REG_SYS_CTL6 = 0x06;
 constexpr uint8_t REG_SYS_CTL8 = 0x08;
 /* [7:4]: 停充电流 = N * 50mA */
 constexpr uint8_t MASK_STOP_CURRENT = 0xF0;
-/* [3:0]: 再充电阈值 */
-constexpr uint8_t MASK_RECHARGE_THRES = 0x0F;
+/* [3:2]: 再充电阈值 (00=无,01=0.05V,10=0.1V,11=0.2V) */
+constexpr uint8_t MASK_RECHARGE_THRES = 0x0C;
+/* [1]: 充满后是否关闭充电使能 (0=自动关闭+保留超时保护, 1=不关闭) */
+constexpr uint8_t BIT_CHG_OVTIME = 0x02;
 
 /* 0x09: 系统控制 9 — 待机使能和低电电压设置 */
 constexpr uint8_t REG_SYS_CTL9 = 0x09;

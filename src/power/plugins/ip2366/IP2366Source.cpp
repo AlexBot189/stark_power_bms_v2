@@ -524,6 +524,13 @@ bool IP2366Source::initChargeParams()
     }
     ECO_INFO("[IP2366] charge voltage: %u mV (reg=0x%02X)", vs, vset);
 
+    /* 电池串联节数 (0x04[2:0]): 本板 6S */
+    if (!rmwReg(REG_SYS_CTL4, MASK_BAT_NUM, BAT_NUM_6S)) {
+        ECO_ERROR("[IP2366] set battery series count failed");
+        return false;
+    }
+    ECO_INFO("[IP2366] battery series: 6S");
+
     /* 充电电流 (0x03): Iset = N * 100mA */
     uint16_t cs = m_cfg.charge_current_ma;
     uint8_t iset = static_cast<uint8_t>(cs / 100);
